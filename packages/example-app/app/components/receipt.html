@@ -1,5 +1,4 @@
 <!-- packages/example-app/app/components/receipt.html -->
-<!-- ★ ИСПРАВЛЕНИЕ: Все атрибуты и комментарии перенесены внутрь тега div -->
 <div 
   atom-socket="receipt-updates"
   atom-on-event="receipt-changed"
@@ -8,10 +7,12 @@
 >
     <h3>Чек</h3>
     
-    <p classis="status-message" atom-if="data.receipt.statusMessage">
+    <!-- ★ ИСПРАВЛЕНИЕ: Правильный класс для сообщения -->
+    <p class="status-message" atom-if="data.receipt.statusMessage">
       {{ data.receipt.statusMessage }}
     </p>
 
+    <!-- ★ ИСПРАВЛЕНИЕ: Блок Mustache должен содержать только один <ul> -->
     {{#data.receipt.items}}
     <ul class="receipt-items">
         {{#.}}

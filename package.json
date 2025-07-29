@@ -8,7 +8,7 @@
     "dev": "npm run dev --workspace=example-app",
     "start": "npm run start --workspace=example-app",
     "package": "npm run package --workspace=example-app",
-    "test": "echo \"Tests not implemented yet.\""
+    "test": "node ./tests/run-all-tests.js"
   },
   "workspaces": [
     "packages/*"

@@ -1,5 +1,4 @@
 // packages/axle-llm/core/request-handler.js
-
 const { URL, URLSearchParams } = require('url');
 const path = require('path');
 const fs = require('fs');
@@ -9,20 +8,18 @@ const { ActionEngine } = require('./action-engine');
 const { AuthEngine } = require('./auth-engine');
 
 class RequestHandler {
+  // ... конструктор и init без изменений ...
   constructor(manifest, connectorManager, assetLoader, renderer, appPath) {
-    // ... (конструктор без изменений)
     this.manifest = manifest;
     this.connectorManager = connectorManager;
     this.assetLoader = assetLoader;
     this.renderer = renderer;
     this.appPath = appPath;
-    
     this.authEngine = null;
     this.socketEngine = null;
   }
 
   async init() {
-    // ... (init без изменений)
     if (this.manifest.auth) {
       this.authEngine = new AuthEngine(this.manifest, this.connectorManager);
       await this.authEngine.init();
@@ -30,12 +27,10 @@ class RequestHandler {
   }
 
   setSocketEngine(socketEngine) {
-    // ... (setSocketEngine без изменений)
     this.socketEngine = socketEngine;
   }
   
   async handle(req, res) {
-    // ... (handle без изменений)
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
       const isSpaRequest = req.headers['x-requested-with'] === 'axleLLM-SPA';
@@ -67,12 +62,15 @@ class RequestHandler {
       if (routeConfig.type === 'view') {
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
         const renderContext = { data: dataContext, user };
+
         if (isSpaRequest) {
           const mainContentComponent = routeConfig.inject?.pageContent;
           if (!mainContentComponent) {
             throw new Error(`Route ${routeConfig.key} cannot be loaded via SPA because it has no 'pageContent' in inject config.`);
           }
-          const { html, styles } = await this.renderer._renderComponentRecursive(mainContentComponent, { ...renderContext, url: this.renderer._getUrlContext(url) }, routeConfig.inject);
+          // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
+          // Мы должны передавать полный renderContext, который уже содержит `user`
+          const { html, styles } = await this.renderer._renderComponentRecursive(mainContentComponent, renderContext, routeConfig.inject);
           const spaPayload = {
             title: this.manifest.launch.title,
             styles,
@@ -108,14 +106,11 @@ class RequestHandler {
     }
   }
 
-  // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
+  // ... остальная часть файла без изменений ...
   async runAction(routeName, parentContext, req = null) {
     const routeConfig = this.manifest.routes[routeName];
     if (!routeConfig) throw new Error(`Action route '${routeName}' not found.`);
 
-    // Если `parentContext` уже содержит `data` (как в случае с `action:run`),
-    // мы используем его. Иначе (при первом вызове из `handle`),
-    // мы загружаем `data` из коннекторов.
     const dataContext = parentContext.data || await this.connectorManager.getContext(routeConfig.reads || []);
     const currentUrl = req ? new URL(req.url, `http://${req.headers.host}`) : null;
     const context = { ...parentContext, data: dataContext };
@@ -134,14 +129,11 @@ class RequestHandler {
       sessionCookie = this.authEngine.clearSessionCookie(req);
     }
 
-    // Если этот экшен является `internal`, он не должен ничего записывать или отвечать,
-    // он просто возвращает измененный контекст.
     if (routeConfig.internal) {
         return finalContext;
     }
 
     for (const key of (routeConfig.writes || [])) {
-      // Проверяем, что данные для записи существуют
       if (finalContext.data[key]) {
         await this.connectorManager.getConnector(key).write(finalContext.data[key]);
         if (this.socketEngine) {
@@ -160,10 +152,8 @@ class RequestHandler {
 
     return { responsePayload, sessionCookie, data: finalContext.data };
   }
-  // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
 
   _findRoute(method, pathname) {
-    // ... (остальные методы без изменений)
     const routes = this.manifest.routes || {};
     const key = `${method} ${pathname}`;
     if (routes[key]) {
