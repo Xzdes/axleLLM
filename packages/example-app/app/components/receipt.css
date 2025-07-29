@@ -1,0 +1,144 @@
+/* 
+  Стили для компонента `receipt`.
+  Все правила в этом файле будут изолированы.
+*/
+
+/* Стилизуем корневой элемент компонента */
+:host {
+  display: flex; /* Используем Flexbox для внутреннего layout'а */
+  flex-direction: column; /* Элементы будут располагаться друг под другом */
+  background-color: var(--secondary-bg, #FFFFFF);
+  border: 1px solid #e0e0e0;
+  border-radius: var(--border-radius, 8px);
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  min-width: 380px; /* Минимальная ширина, чтобы чек не сжимался */
+}
+
+/* Заголовок "Чек" */
+h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 1.25rem;
+}
+
+/* Статусное сообщение (например, "Купон применен!") */
+.status-message {
+  padding: 10px;
+  margin: -10px 0 15px 0;
+  background-color: #e6f7ff;
+  border: 1px solid #91d5ff;
+  color: #096dd9;
+  border-radius: 6px;
+  text-align: center;
+}
+
+/* Список товаров в чеке */
+.receipt-items {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  flex-grow: 1; /* ★ Этот список будет растягиваться, занимая все свободное место */
+}
+
+.receipt-items li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 4px;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 0.95rem;
+}
+
+.receipt-items li:last-child {
+  border-bottom: none;
+}
+
+/* Стили для сообщения "Чек пуст" */
+.empty-state {
+  flex-grow: 1; /* Также растягивается, чтобы центрировать текст по вертикали */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: #8c8c8c;
+  min-height: 150px; /* Минимальная высота, чтобы не выглядело сплюснуто */
+}
+.empty-state p { margin: 0; font-size: 1rem; font-weight: 500; }
+.empty-state span { font-size: 0.85rem; }
+
+/* Кнопка удаления товара "×" */
+.remove-btn {
+  background: transparent;
+  border: none;
+  color: #a0a0a0;
+  font-weight: bold;
+  font-size: 1.5rem;
+  padding: 0 8px;
+  margin-left: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.remove-btn:hover { color: #d9363e; }
+
+/* Разделитель <hr> */
+hr {
+  border: none;
+  border-top: 1px dashed #cccccc;
+  margin: 16px 0;
+}
+
+/* Блок с итоговыми суммами */
+.totals p {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1rem;
+  margin: 6px 0;
+}
+.totals .discount { color: #389e0d; }
+.totals .final-total {
+  font-size: 1.25rem;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Форма для промокода */
+.coupon-form {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+}
+.coupon-form input {
+  flex-grow: 1;
+  padding: 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+}
+
+/* --- Общие стили для кнопок действий --- */
+.action-button {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #d9d9d9;
+  background-color: #f5f5f5;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.action-button:hover { background-color: #e8e8e8; border-color: #bfbfbf; }
+
+/* Модификатор для "опасной" кнопки (Очистить чек) */
+.action-button.danger {
+  background-color: #fff1f0;
+  border-color: #ffccc7;
+  color: #cf1322;
+  margin-top: 10px;
+}
+.action-button.danger:hover { background-color: #ffccc7; border-color: #ffa39e; }

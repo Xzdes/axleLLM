@@ -1,0 +1,44 @@
+{
+  "name": "axle-llm",
+  "version": "1.0.0-alpha.1",
+  "description": "A declarative engine for building native desktop applications with web technologies, designed for LLM architects.",
+  "main": "index.js",
+  "bin": {
+    "axle-cli": "cli.js"
+  },
+  "files": [
+    "core/",
+    "client/",
+    "cli.js",
+    "index.js",
+    "main.js"
+  ],
+  "scripts": {
+    "test": "echo \"Tests not implemented yet.\""
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie": "^1.0.2",
+    "css-tree": "^3.1.0",
+    "electron": "^37.2.4",
+    "electron-builder": "^26.0.19",
+    "electron-reloader": "^1.2.3",
+    "get-port": "^7.1.0",
+    "posthtml": "^0.16.6",
+    "wise-json-db": "^6.0.2",
+    "ws": "^8.18.0",
+    "zod": "^4.0.13"
+  },
+  "keywords": [
+    "declarative",
+    "llm",
+    "ai",
+    "desktop",
+    "native",
+    "electron",
+    "nodejs",
+    "commonjs"
+  ],
+  "author": "Xzdes",
+  "license": "MIT"
+}

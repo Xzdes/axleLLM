@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Используем глобальную переменную из манифеста для заголовка -->
+    <title>{{ globals.appName }}</title>
+    
+    <!-- 
+      Общие стили для всего приложения.
+      Они не изолированы, так как находятся в главном макете, а не в компоненте.
+      Движок axleLLM вставит сюда изолированные стили для компонентов.
+    -->
+    <style>
+        :root {
+            /* Базовые переменные, которые можно будет переопределить через систему тем */
+            --primary-bg: #f0f2f5;
+            --secondary-bg: #FFFFFF;
+            --text-color: #1a1a1a;
+            --header-height: 60px;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            margin: 0;
+            padding-top: var(--header-height); /* Фиксированный отступ под шапку */
+        }
+        
+        .app-header {
+            width: 100%;
+            height: var(--header-height);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 24px;
+            background-color: var(--secondary-bg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: fixed;
+            top: 0;
+            left: 0;
+            box-sizing: border-box;
+            z-index: 100;
+        }
+        
+        .app-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-info span {
+            font-weight: bold;
+        }
+        
+        .user-info a {
+            color: #007bff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        main#pageContent-container {
+            padding: 24px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="app-header">
+        <h1>{{ globals.appName }}</h1>
+        
+        <!-- 
+          Этот блок будет показан, только если объект `user` существует
+          (то есть, пользователь авторизован).
+        -->
+        {{#user}}
+        <div class="user-info">
+            <span>{{ user.name }} ({{ user.role }})</span>
+            <!-- Эта ссылка вызовет action для выхода из системы -->
+            <a atom-action="GET /auth/logout">Выход</a>
+        </div>
+        {{/user}}
+    </header>
+
+    <!-- 
+      ★ Главный контейнер для контента.
+      Именно сюда Renderer будет вставлять содержимое страниц
+      (например, `cashierPage` или `authLayout`)
+      в соответствии с директивой `inject` в роуте.
+    -->
+    <main id="pageContent-container">
+        <atom-inject into="pageContent"></atom-inject>
+    </main>
+
+</body>
+</html>

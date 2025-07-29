@@ -1,0 +1,63 @@
+<!-- packages/example-app/app/components/receipt.html -->
+<!-- ★ ИСПРАВЛЕНИЕ: Все атрибуты и комментарии перенесены внутрь тега div -->
+<div 
+  atom-socket="receipt-updates"
+  atom-on-event="receipt-changed"
+  atom-action="POST /action/soft-refresh-receipt"
+  atom-target="#receipt-container"
+>
+    <h3>Чек</h3>
+    
+    <p classis="status-message" atom-if="data.receipt.statusMessage">
+      {{ data.receipt.statusMessage }}
+    </p>
+
+    {{#data.receipt.items}}
+    <ul class="receipt-items">
+        {{#.}}
+        <li>
+            <span>{{name}} ({{price}}р x {{quantity}})</span>
+            <button 
+              class="remove-btn"
+              type="button"
+              atom-action="POST /action/removeItem"
+              atom-target="#receipt-container"
+              name="id"
+              value="{{id}}"
+            >×</button>
+        </li>
+        {{/.}}
+    </ul>
+    {{/data.receipt.items}}
+
+    {{^data.receipt.items}}
+    <div class="empty-state">
+      <p>Чек пуст</p>
+      <span>Добавьте товары из списка слева.</span>
+    </div>
+    {{/data.receipt.items}}
+    
+    <hr>
+    
+    <div class="totals">
+      <p><span>Позиций:</span> <span>{{data.receipt.itemCount}} шт.</span></p>
+      <p><span>Сумма:</span> <span>{{data.receipt.total}} руб.</span></p>
+      <p class="discount"><span>Скидка ({{data.receipt.discountPercent}}%):</span> <span>-{{data.receipt.discount}} руб.</span></p>
+      <p class="final-total"><b>Итого:</b> <b>{{data.receipt.finalTotal}} руб.</b></p>
+    </div>
+
+    <form class="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#receipt-container">
+      <input type="text" name="coupon_code" placeholder="Промокод">
+      <button type="submit" class="action-button">Применить</button>
+    </form>
+    
+    <button 
+      id="clear-btn"
+      type="button"
+      class="action-button danger"
+      atom-action="POST /action/clearReceipt"
+      atom-target="#receipt-container"
+    >
+      Очистить чек
+    </button>
+</div>
