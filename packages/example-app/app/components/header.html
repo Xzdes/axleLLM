@@ -1,0 +1,10 @@
+<!-- packages/example-app/app/components/header.html -->
+<header class="app-header">
+    <h1>{{ globals.appName }}</h1>
+    {{#user}}
+    <div class="user-info">
+        <span>{{ user.name }} ({{ user.role }})</span>
+        <a atom-action="GET /auth/logout">Выход</a>
+    </div>
+    {{/user}}
+</header>

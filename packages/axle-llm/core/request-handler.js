@@ -3,12 +3,10 @@ const { URL, URLSearchParams } = require('url');
 const path = require('path');
 const fs = require('fs');
 const cookie = require('cookie');
-
 const { ActionEngine } = require('./action-engine');
 const { AuthEngine } = require('./auth-engine');
 
 class RequestHandler {
-  // ... конструктор и init без изменений ...
   constructor(manifest, connectorManager, assetLoader, renderer, appPath) {
     this.manifest = manifest;
     this.connectorManager = connectorManager;
@@ -18,14 +16,12 @@ class RequestHandler {
     this.authEngine = null;
     this.socketEngine = null;
   }
-
   async init() {
     if (this.manifest.auth) {
       this.authEngine = new AuthEngine(this.manifest, this.connectorManager);
       await this.authEngine.init();
     }
   }
-
   setSocketEngine(socketEngine) {
     this.socketEngine = socketEngine;
   }
@@ -34,21 +30,15 @@ class RequestHandler {
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
       const isSpaRequest = req.headers['x-requested-with'] === 'axleLLM-SPA';
-
       if (url.pathname === '/engine-client.js') {
         const clientScriptPath = path.resolve(__dirname, '..', 'client', 'engine-client.js');
         const scriptContent = fs.readFileSync(clientScriptPath, 'utf-8');
         this._sendResponse(res, 200, scriptContent, 'application/javascript');
         return;
       }
-      
       const routeConfig = this._findRoute(req.method, url.pathname);
-      if (!routeConfig) {
-        return this._sendResponse(res, 404, 'Not Found');
-      }
-
+      if (!routeConfig) { return this._sendResponse(res, 404, 'Not Found'); }
       const user = this.authEngine ? await this.authEngine.getUserFromRequest(req) : null;
-
       if (routeConfig.auth?.required && !user) {
         const redirectUrl = routeConfig.auth.failureRedirect || '/login';
         if (routeConfig.type === 'action' || isSpaRequest) {
@@ -61,78 +51,59 @@ class RequestHandler {
       
       if (routeConfig.type === 'view') {
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
-        const renderContext = { data: dataContext, user };
-
+        const renderContext = { data: dataContext, user, globals: this.manifest.globals, url: this.renderer._getUrlContext(url) };
         if (isSpaRequest) {
-          const mainContentComponent = routeConfig.inject?.pageContent;
-          if (!mainContentComponent) {
-            throw new Error(`Route ${routeConfig.key} cannot be loaded via SPA because it has no 'pageContent' in inject config.`);
-          }
+          const spaPayload = { title: this.manifest.launch.title, styles: [], injectedParts: {} };
+          
           // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
-          // Мы должны передавать полный renderContext, который уже содержит `user`
-          const { html, styles } = await this.renderer._renderComponentRecursive(mainContentComponent, renderContext, routeConfig.inject);
-          const spaPayload = {
-            title: this.manifest.launch.title,
-            styles,
-            injectedParts: {
-              pageContent: html
-            }
-          };
+          // Мы итерируем по ВСЕМ плейсхолдерам, которые нужно заполнить для этого роута
+          for (const placeholder in routeConfig.inject) {
+              const componentToInject = routeConfig.inject[placeholder];
+              // Рендерим каждую часть с ПОЛНЫМ и ПРАВИЛЬНЫМ контекстом
+              const { html, styles } = await this.renderer._renderComponentRecursive(componentToInject, renderContext, routeConfig.inject);
+              spaPayload.injectedParts[placeholder] = html;
+              spaPayload.styles.push(...styles);
+          }
+
           this._sendResponse(res, 200, spaPayload, 'application/json');
         } else {
           const html = await this.renderer.renderView(routeConfig, renderContext, url);
           this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
         }
-
       } else if (routeConfig.type === 'action') {
         const body = await this._parseBody(req);
         const socketId = req.headers['x-socket-id'] || null;
         const initialContext = { user, body, socketId };
-        
         const result = await this.runAction(routeConfig.key, initialContext, req);
-        
         if (result.sessionCookie) {
           res.setHeader('Set-Cookie', result.sessionCookie);
         }
-        
         this._sendResponse(res, 200, result.responsePayload, 'application/json');
       }
-
     } catch (error) {
       console.error(`[RequestHandler] Error processing request ${req.method} ${req.url}:`, error);
-      if (!res.headersSent) {
-        this._sendResponse(res, 500, 'Internal Server Error');
-      }
+      if (!res.headersSent) { this._sendResponse(res, 500, 'Internal Server Error'); }
     }
   }
 
-  // ... остальная часть файла без изменений ...
   async runAction(routeName, parentContext, req = null) {
     const routeConfig = this.manifest.routes[routeName];
     if (!routeConfig) throw new Error(`Action route '${routeName}' not found.`);
-
     const dataContext = parentContext.data || await this.connectorManager.getContext(routeConfig.reads || []);
     const currentUrl = req ? new URL(req.url, `http://${req.headers.host}`) : null;
     const context = { ...parentContext, data: dataContext };
-
     const engine = new ActionEngine(context, this.appPath, this.assetLoader, this);
     await engine.run(routeConfig.steps || []);
-    
     const finalContext = engine.context;
     const internalActions = finalContext._internal || {};
     let sessionCookie = null;
-
     if (internalActions.loginUser && this.authEngine) {
       sessionCookie = await this.authEngine.createSessionCookie(internalActions.loginUser);
     }
     if (internalActions.logout && this.authEngine) {
       sessionCookie = this.authEngine.clearSessionCookie(req);
     }
-
-    if (routeConfig.internal) {
-        return finalContext;
-    }
-
+    if (routeConfig.internal) { return finalContext; }
     for (const key of (routeConfig.writes || [])) {
       if (finalContext.data[key]) {
         await this.connectorManager.getConnector(key).write(finalContext.data[key]);
@@ -141,7 +112,6 @@ class RequestHandler {
         }
       }
     }
-
     let responsePayload = {};
     if (internalActions.redirect) {
       responsePayload.redirect = internalActions.redirect;
@@ -149,7 +119,6 @@ class RequestHandler {
       const renderContext = { data: finalContext.data, user: finalContext.user };
       responsePayload = await this.renderer.renderComponent(routeConfig.update, renderContext, currentUrl);
     }
-
     return { responsePayload, sessionCookie, data: finalContext.data };
   }
 
@@ -162,7 +131,6 @@ class RequestHandler {
     }
     return null;
   }
-  
   _parseBody(req) {
     return new Promise((resolve, reject) => {
       const contentType = req.headers['content-type'] || '';
@@ -179,14 +147,10 @@ class RequestHandler {
       req.on('error', err => reject(err));
     });
   }
-  
   _sendResponse(res, statusCode, data, contentType = 'text/plain') {
     if (res.headersSent) return;
     const body = (contentType.includes('json')) ? JSON.stringify(data) : data;
     res.writeHead(statusCode, { 'Content-Type': contentType }).end(body);
   }
 }
-
-module.exports = {
-  RequestHandler,
-};
+module.exports = { RequestHandler };
