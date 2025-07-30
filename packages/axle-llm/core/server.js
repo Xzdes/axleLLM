@@ -11,12 +11,15 @@ const { SocketEngine } = require('./socket-engine');
  * но НЕ запускает его прослушивание.
  * @param {string} appPath - Абсолютный путь к приложению пользователя.
  * @param {object} manifest - Загруженный объект манифеста.
+ * @param {object} [options={}] - Дополнительные опции.
+ * @param {string} [options.dbPath] - Путь для хранения базы данных.
  * @returns {Promise<{httpServer: http.Server}>}
  */
-async function createServerInstance(appPath, manifest) {
+async function createServerInstance(appPath, manifest, options = {}) {
   try {
     console.log('[axle-server] Initializing engine components...');
-    const connectorManager = new ConnectorManager(appPath, manifest);
+    // ★★★ ИЗМЕНЕНИЕ: Пробрасываем опции в ConnectorManager ★★★
+    const connectorManager = new ConnectorManager(appPath, manifest, { dbPath: options.dbPath });
     await connectorManager.init();
     const assetLoader = new AssetLoader(appPath, manifest);
     const renderer = new Renderer(assetLoader, manifest, connectorManager);

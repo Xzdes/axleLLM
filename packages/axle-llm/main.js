@@ -8,23 +8,16 @@ const { default: getPort } = require('get-port');
 
 const isDev = process.argv.includes('--dev');
 
-// ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
-// Определяем путь к приложению (appPath) в зависимости от режима запуска
 let appPath;
 if (isDev) {
-  // В режиме разработки мы ожидаем, что путь передан как аргумент
   appPath = process.argv[2]; 
 } else {
-  // В собранном приложении appPath - это корень самого приложения.
-  // Electron автоматически распаковывает asar-архив при доступе.
   appPath = app.getAppPath();
 }
-// ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
 
 if (!appPath) {
   console.error('[axle-main] Critical: Application path was not provided or could not be determined. Exiting.');
-  // Для наглядности при запуске .exe добавим диалоговое окно
-  if (!app.isPackaged) {
+  if (app && typeof app.isPackaged === 'boolean' && !app.isPackaged) {
       dialog.showErrorBox('Critical Error', 'Application path was not provided. Exiting.');
   }
   process.exit(1);
@@ -107,7 +100,20 @@ async function createWindow() {
   setupBridge(win);
 
   try {
-    const { httpServer } = await createServerInstance(appPath, manifest);
+    // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+    let dbPath;
+    if (isDev) {
+      // В режиме разработки используем локальную папку, которую наполняет seed.js
+      dbPath = path.join(appPath, 'axle-db-data');
+    } else {
+      // В собранном приложении используем папку данных пользователя
+      dbPath = path.join(app.getPath('userData'), 'axle-db-data');
+    }
+
+    // Передаем вычисленный путь при создании экземпляра сервера.
+    const { httpServer } = await createServerInstance(appPath, manifest, { dbPath });
+    // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+    
     const port = await getPort();
     const host = '127.0.0.1';
     

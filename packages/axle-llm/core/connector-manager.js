@@ -15,19 +15,25 @@ class ConnectorManager {
   /**
    * @param {string} appPath - Абсолютный путь к приложению пользователя.
    * @param {object} manifest - Загруженный объект манифеста.
+   * @param {object} [options={}] - Дополнительные опции.
+   * @param {string} [options.dbPath] - Путь для хранения базы данных.
    */
-  constructor(appPath, manifest) {
+  constructor(appPath, manifest, options = {}) {
     this.appPath = appPath;
     this.manifest = manifest;
     
     // Хранилище для всех инициализированных экземпляров коннекторов.
     this.connectors = {};
 
+
+    // Используем переданный путь. Если его нет, возвращаемся к старому поведению (для обратной совместимости и простых сценариев).
+    const dbPath = options.dbPath || path.join(this.appPath, 'axle-db-data');
+    console.log(`[ConnectorManager] Database storage path set to: ${dbPath}`);
+
+
     // Создаем ЕДИНЫЙ экземпляр `wise-json-db` для всего приложения.
     // Все `wise-json` коннекторы будут использовать этот один экземпляр,
     // работая с разными коллекциями внутри него.
-    // Мы храним данные в специальной папке, чтобы не засорять корень проекта.
-    const dbPath = path.join(this.appPath, 'axle-db-data');
     this.dbInstance = new WiseJSON(dbPath);
     this.dbInitPromise = null; // Промис для отслеживания инициализации БД.
   }
