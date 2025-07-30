@@ -1,21 +1,29 @@
 // packages/example-app/manifest/routes.js
 module.exports = {
-  // ... (recalculateReceiptLogic без изменений) ...
   "recalculateReceiptLogic": {
-    "type": "action", "internal": true, "steps": [
+    "type": "action",
+    "internal": true,
+    "steps": [
+      // 1. Посчитать количество товаров
       { "set": "data.receipt.itemCount", "to": "data.receipt.items.reduce((sum, item) => sum + (item.quantity || 0), 0)" },
-      { "set": "context.total", "to": "data.receipt.items.reduce((sum, item) => sum + (parseFloat(item.price || 0) * Number(item.quantity || 0)), 0)" },
-      { "set": "data.receipt.total", "to": "context.total.toFixed(2)" },
-      { "set": "context.discount", "to": "context.total * (parseFloat(data.receipt.discountPercent || 0) / 100)" },
-      { "set": "data.receipt.discount", "to": "context.discount.toFixed(2)" },
-      { "set": "data.receipt.finalTotal", "to": "(context.total - context.discount).toFixed(2)" }
+      
+      // 2. Вызвать хендлер для подсчета "грязной" суммы
+      // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Мы передаем массив [items], чтобы хендлер получил один аргумент ★★★
+      { "run:set": "data.receipt.total", "handler": "calculateTotal", "with": "[data.receipt.items]" },
+      
+      // 3. Вызвать хендлер для подсчета финальной суммы и скидки
+      { "run:set": "context.finalCalc", "handler": "calculateFinalTotal", "with": "[data.receipt.total, data.receipt.discountPercent]" },
+      
+      // 4. Разложить результат по нужным полям
+      { "set": "data.receipt.discount", "to": "context.finalCalc.discount" },
+      { "set": "data.receipt.finalTotal", "to": "context.finalCalc.finalTotal" }
     ]
   },
 
   "GET /": {
     "type": "view", "layout": "mainLayout", "reads": ["user", "receipt", "positions", "viewState"],
     "inject": {
-      "header": "header", // ★ ИЗМЕНЕНИЕ: Инжектируем шапку
+      "header": "header",
       "pageContent": "cashierPage",
       "positionsList": "positionsList",
       "receipt": "receipt"
@@ -26,7 +34,7 @@ module.exports = {
   "GET /login": {
     "type": "view", "layout": "mainLayout",
     "inject": {
-      "header": "header", // ★ ИЗМЕНЕНИЕ: Инжектируем шапку
+      "header": "header",
       "pageContent": "authLayout",
       "formContent": "loginForm"
     }
@@ -35,14 +43,24 @@ module.exports = {
   "GET /register": {
     "type": "view", "layout": "mainLayout",
     "inject": {
-      "header": "header", // ★ ИЗМЕНЕНИЕ: Инжектируем шапку
+      "header": "header",
       "pageContent": "authLayout",
       "formContent": "registerForm"
     }
   },
+
+  "POST /auth/login": { "type": "action", "reads": ["user"], "steps": [ { "set": "context.userToLogin", "to": "data.user.items.find(u => u.login === body.login)" }, { "set": "context.bcrypt", "to": "require('bcrypt')" }, { "if": "context.userToLogin && context.bcrypt.compareSync(body.password, context.userToLogin.passwordHash)", "then": [ { "auth:login": "context.userToLogin" }, { "client:redirect": "'/'" } ], "else": [ { "client:redirect": "'/login?error=1'" } ] } ] },
+  "POST /auth/register": { "type": "action", "reads": ["user"], "writes": ["user"], "steps": [ { "set": "context.userExists", "to": "data.user.items.some(u => u.login === body.login)" }, { "if": "context.userExists", "then": [{ "client:redirect": "'/register?error=1'" }], "else": [ { "set": "context.bcrypt", "to": "require('bcrypt')" }, { "set": "context.passwordHash", "to": "context.bcrypt.hashSync(body.password, 10)" }, { "set": "context.newUser", "to": "{ login: body.login, name: body.name, role: 'Кассир', passwordHash: context.passwordHash }" }, { "set": "data.user.items", "to": "data.user.items.concat([context.newUser])" }, { "client:redirect": "'/login?registered=true'" } ] } ] },
+  "GET /auth/logout": { "type": "action", "steps": [ { "auth:logout": true }, { "client:redirect": "'/login'" } ] },
+  "POST /action/addItem": { "type": "action", "reads": ["positions", "receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "context.productToAdd", "to": "data.positions.items.find(p => p.id == body.id)" }, { "set": "context.itemInReceipt", "to": "data.receipt.items.find(i => i.id == body.id)" }, { "if": "context.itemInReceipt", "then": [{ "set": "context.itemInReceipt.quantity", "to": "context.itemInReceipt.quantity + 1" }], "else": [ { "set": "context.productToAdd.quantity", "to": "1" }, { "set": "data.receipt.items", "to": "data.receipt.items.concat([context.productToAdd])" } ] }, { "set": "data.receipt.statusMessage", "to": "''" }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
+  "POST /action/removeItem": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.items", "to": "data.receipt.items.filter(i => i.id != body.id)" }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
+  "POST /action/clearReceipt": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.items", "to": "[]" }, { "set": "data.receipt.discountPercent", "to": "0" }, { "set": "data.receipt.statusMessage", "to": "'Чек очищен.'" }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
+  "POST /action/filterPositions": { "type": "action", "reads": ["positions", "viewState"], "writes": ["viewState"], "update": "positionsList", "steps": [{ "run": "filterPositions" }] },
+  "POST /action/applyCoupon": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.statusMessage", "to": "'Неверный купон!'" }, { "set": "data.receipt.discountPercent", "to": "0" }, { "if": "body.coupon_code === 'SALE15'", "then": [ { "set": "data.receipt.discountPercent", "to": 15 }, { "set": "data.receipt.statusMessage", "to": "'Купон SALE15 применен!'" } ] }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
+  "POST /action/soft-refresh-receipt": { "type": "action", "reads": ["receipt"], "update": "receipt", "steps": [] },
   "GET /action/showInfo": {
     "type": "action",
-    "reads": ["receipt"], // Читаем чек, чтобы использовать его данные в сообщении
+    "reads": ["receipt"],
     "steps": [
       {
         "bridge:call": {
@@ -57,19 +75,7 @@ module.exports = {
       }
     ]
   },
-
-
-  // ... (все action-роуты остаются без изменений) ...
-  "POST /auth/login": { "type": "action", "reads": ["user"], "steps": [ { "set": "context.userToLogin", "to": "data.user.items.find(u => u.login === body.login)" }, { "set": "context.bcrypt", "to": "require('bcrypt')" }, { "if": "context.userToLogin && context.bcrypt.compareSync(body.password, context.userToLogin.passwordHash)", "then": [ { "auth:login": "context.userToLogin" }, { "client:redirect": "'/'" } ], "else": [ { "client:redirect": "'/login?error=1'" } ] } ] },
-  "POST /auth/register": { "type": "action", "reads": ["user"], "writes": ["user"], "steps": [ { "set": "context.userExists", "to": "data.user.items.some(u => u.login === body.login)" }, { "if": "context.userExists", "then": [{ "client:redirect": "'/register?error=1'" }], "else": [ { "set": "context.bcrypt", "to": "require('bcrypt')" }, { "set": "context.passwordHash", "to": "context.bcrypt.hashSync(body.password, 10)" }, { "set": "context.newUser", "to": "{ login: body.login, name: body.name, role: 'Кассир', passwordHash: context.passwordHash }" }, { "set": "data.user.items", "to": "data.user.items.concat([context.newUser])" }, { "client:redirect": "'/login?registered=true'" } ] } ] },
-  "GET /auth/logout": { "type": "action", "steps": [ { "auth:logout": true }, { "client:redirect": "'/login'" } ] },
-  "POST /action/addItem": { "type": "action", "reads": ["positions", "receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "context.productToAdd", "to": "data.positions.items.find(p => p.id == body.id)" }, { "set": "context.itemInReceipt", "to": "data.receipt.items.find(i => i.id == body.id)" }, { "if": "context.itemInReceipt", "then": [{ "set": "context.itemInReceipt.quantity", "to": "context.itemInReceipt.quantity + 1" }], "else": [ { "set": "context.productToAdd.quantity", "to": "1" }, { "set": "data.receipt.items", "to": "data.receipt.items.concat([context.productToAdd])" } ] }, { "set": "data.receipt.statusMessage", "to": "''" }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
-  "POST /action/removeItem": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.items", "to": "data.receipt.items.filter(i => i.id != body.id)" }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
-  "POST /action/clearReceipt": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.items", "to": "[]" }, { "set": "data.receipt.discountPercent", "to": "0" }, { "set": "data.receipt.statusMessage", "to": "'Чек очищен.'" }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
-  "POST /action/filterPositions": { "type": "action", "reads": ["positions", "viewState"], "writes": ["viewState"], "update": "positionsList", "steps": [{ "run": "filterPositions" }] },
-  "POST /action/applyCoupon": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.statusMessage", "to": "'Неверный купон!'" }, { "set": "data.receipt.discountPercent", "to": "0" }, { "if": "body.coupon_code === 'SALE15'", "then": [ { "set": "data.receipt.discountPercent", "to": 15 }, { "set": "data.receipt.statusMessage", "to": "'Купон SALE15 применен!'" } ] }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
-  "POST /action/soft-refresh-receipt": { "type": "action", "reads": ["receipt"], "update": "receipt", "steps": [] },
-    "GET /action/open-file": {
+  "GET /action/open-file": {
     "type": "action",
     "steps": [
       {
