@@ -1,17 +1,14 @@
 // tests/socket.test.js
-
 const path = require('path');
 const http = require('http');
 const WebSocket = require('ws');
+const { createServerInstance } = require('../packages/axle-llm/core/server');
 
-// Пути к модулям ядра
-const { createServer } = require('../packages/axle-llm'); // Используем главный экспорт
-
-// Вспомогательные функции
 function log(message, data) {
     console.log(`\n[LOG] ${message}`);
     if (data !== undefined) {
-        console.log(JSON.stringify(data, null, 2));
+        const replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
+        console.log(JSON.stringify(data, replacer, 2));
     }
 }
 function check(condition, description, actual) {
@@ -38,7 +35,7 @@ module.exports = {
                 connectors: {
                     cart: { type: 'in-memory', initialState: { items: [] } }
                 },
-                components: {}, // Не нужны для этого теста
+                components: {},
                 routes: {
                     'POST /action/addItem': {
                         type: 'action',
@@ -54,75 +51,60 @@ module.exports = {
         async run(appPath) {
             let server;
             let ws1, ws2;
-            const PORT = 5001; // Используем фиксированный порт для теста
+            const PORT = 5004; // Используем другой порт для надежности
 
             try {
                 log('Starting a temporary axleLLM server...');
-                // Запускаем наш движок. createServer возвращает объект с http-сервером.
-                const serverComponents = await createServer(appPath, { port: PORT });
-                server = serverComponents.server;
-
-                const receivedMessages = [];
+                const manifest = require(path.join(appPath, 'manifest.js'));
+                const { httpServer } = await createServerInstance(appPath, manifest);
+                server = httpServer;
                 
-                // Функция для создания и инициализации клиента
+                // Запускаем сервер на прослушивание порта
+                await new Promise(resolve => server.listen(PORT, resolve));
+                
+                const receivedMessages = [];
                 const createClient = (url) => {
                     return new Promise((resolve, reject) => {
                         const ws = new WebSocket(url);
                         ws.on('message', (message) => {
                             const parsed = JSON.parse(message.toString());
-                            if (ws.id) { // Сохраняем сообщение только если ID уже присвоен
-                                receivedMessages.push({ clientId: ws.id, ...parsed });
-                            }
-                            if (parsed.type === 'socket_id_assigned') {
-                                ws.id = parsed.id;
-                                resolve(ws);
-                            }
+                            if (ws.id) { receivedMessages.push({ clientId: ws.id, ...parsed }); }
+                            if (parsed.type === 'socket_id_assigned') { ws.id = parsed.id; resolve(ws); }
                         });
                         ws.on('error', reject);
                     });
                 };
 
                 log('Connecting WebSocket clients...');
-                [ws1, ws2] = await Promise.all([
-                    createClient(`ws://localhost:${PORT}`),
-                    createClient(`ws://localhost:${PORT}`)
-                ]);
+                [ws1, ws2] = await Promise.all([ createClient(`ws://localhost:${PORT}`), createClient(`ws://localhost:${PORT}`) ]);
                 log(`Clients initialized with IDs: ws1=${ws1.id}, ws2=${ws2.id}`);
                 
                 log(`Subscribing client ws1 (${ws1.id}) to "cart-updates"...`);
                 ws1.send(JSON.stringify({ type: 'subscribe', channel: 'cart-updates' }));
-                await new Promise(resolve => setTimeout(resolve, 50)); // Даем время на обработку подписки
-
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
                 log('Simulating HTTP request from ws2 to trigger an action...');
                 const postData = JSON.stringify({ item: 'milk' });
-                const options = {
-                    hostname: 'localhost', port: PORT, path: '/action/addItem', method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Socket-Id': ws2.id // ★ Важно: представляемся как ws2
-                    }
-                };
-
+                const options = { hostname: 'localhost', port: PORT, path: '/action/addItem', method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Socket-Id': ws2.id } };
+                
                 await new Promise((resolve, reject) => {
                     const req = http.request(options, res => { res.on('data', () => {}); res.on('end', resolve); });
                     req.on('error', reject);
                     req.write(postData);
                     req.end();
                 });
-
+                
                 log('HTTP request finished. Waiting for broadcast...');
                 await new Promise(resolve => setTimeout(resolve, 200));
-
+                
                 log('Checking received messages...');
                 const messagesForWs1 = receivedMessages.filter(m => m.clientId === ws1.id);
                 log(`Messages for ws1 (${ws1.id}):`, messagesForWs1);
                 
                 const cartChangedMessage = messagesForWs1.find(m => m.event === 'cart_updated');
                 check(cartChangedMessage, 'Client ws1 (observer) should have received the "cart_updated" event.');
-                if (cartChangedMessage) {
-                    check(cartChangedMessage.payload.items[0] === 'milk', 'The payload should be correct.');
-                }
-
+                if (cartChangedMessage) { check(cartChangedMessage.payload.items[0] === 'milk', 'The payload should be correct.'); }
+                
                 const messagesForWs2 = receivedMessages.filter(m => m.clientId === ws2.id);
                 const cartChangedMessageForInitiator = messagesForWs2.find(m => m.event === 'cart_updated');
                 check(!cartChangedMessageForInitiator, 'Client ws2 (initiator) should NOT have received the event.');

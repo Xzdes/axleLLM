@@ -9,7 +9,8 @@ const { ConnectorManager } = require('../packages/axle-llm/core/connector-manage
 function log(message, data) {
     console.log(`\n[LOG] ${message}`);
     if (data !== undefined) {
-        console.log(typeof data === 'object' ? JSON.stringify(data, null, 2) : data);
+        const replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
+        console.log(JSON.stringify(data, replacer, 2));
     }
 }
 function check(condition, description, actual) {
@@ -31,14 +32,10 @@ async function setupEnvironment(appPath) {
     return { manifest, renderer };
 }
 
-
 module.exports = {
-    // ... (остальные тесты без изменений) ...
+    // ... (все тесты до "View rendering" остаются без изменений) ...
     'Renderer: Basic variable rendering': {
-        options: {
-            manifest: { components: { 'hello': 'hello.html' } },
-            files: { 'app/components/hello.html': '<h1>Hello, {{name}}!</h1>' }
-        },
+        options: { manifest: { components: { 'hello': 'hello.html' } }, files: { 'app/components/hello.html': '<h1>Hello, {{name}}!</h1>' } },
         async run(appPath) {
             const { renderer } = await setupEnvironment(appPath);
             const { html } = await renderer.renderComponent('hello', { name: 'World' });
@@ -47,10 +44,7 @@ module.exports = {
         }
     },
     'Renderer: atom-if with false condition should remove element': {
-        options: {
-            manifest: { components: { 'conditional': 'conditional.html' } },
-            files: { 'app/components/conditional.html': '<div><p atom-if="show">You should not see this.</p></div>' }
-        },
+        options: { manifest: { components: { 'conditional': 'conditional.html' } }, files: { 'app/components/conditional.html': '<div><p atom-if="show">You should not see this.</p></div>' } },
         async run(appPath) {
             const { renderer } = await setupEnvironment(appPath);
             const { html } = await renderer.renderComponent('conditional', { show: false });
@@ -59,10 +53,7 @@ module.exports = {
         }
     },
     'Renderer: atom-if with true condition should keep element and remove attribute': {
-        options: {
-            manifest: { components: { 'conditional': 'conditional.html' } },
-            files: { 'app/components/conditional.html': '<div><p atom-if="user.isAdmin">Welcome, Admin!</p></div>' }
-        },
+        options: { manifest: { components: { 'conditional': 'conditional.html' } }, files: { 'app/components/conditional.html': '<div><p atom-if="user.isAdmin">Welcome, Admin!</p></div>' } },
         async run(appPath) {
             const { renderer } = await setupEnvironment(appPath);
             const { html } = await renderer.renderComponent('conditional', { user: { isAdmin: true } });
@@ -71,32 +62,16 @@ module.exports = {
             check(!html.includes('atom-if'), 'The atom-if attribute itself should be removed.', html);
         }
     },
-
     'Renderer: Scoped CSS should be applied': {
-        options: {
-            manifest: { 
-                components: { 
-                    'card': { template: 'card.html', style: 'card.css' } 
-                } 
-            },
-            files: {
-                'app/components/card.html': '<div><h3>Title</h3></div>',
-                'app/components/card.css': ':host { border: 1px solid red; } h3 { color: blue; }'
-            }
-        },
+        options: { manifest: { components: { 'card': { template: 'card.html', style: 'card.css' } } }, files: { 'app/components/card.html': '<div><h3>Title</h3></div>', 'app/components/card.css': ':host { border: 1px solid red; } h3 { color: blue; }' } },
         async run(appPath) {
             const { renderer } = await setupEnvironment(appPath);
             const { html, styles } = await renderer.renderComponent('card', {});
-            log('Received HTML:', html);
-            log('Received Styles:', styles);
-
+            log('Received HTML:', html); log('Received Styles:', styles);
             const componentIdMatch = html.match(/data-component-id="([^"]+)"/);
             check(componentIdMatch, 'HTML should have a data-component-id attribute.');
             const scopeSelector = `[data-component-id="${componentIdMatch[1]}"]`;
-            
-            // ★ ИСПРАВЛЕНИЕ: Делаем проверку менее чувствительной к пробелам
             const normalizedStyles = styles.replace(/\s+/g, ' ');
-
             check(normalizedStyles.includes(`${scopeSelector} { border: 1px solid red; }`), 'CSS rule for :host should be scoped.', normalizedStyles);
             check(normalizedStyles.includes(`${scopeSelector} h3`), 'CSS rule for h3 should be scoped.', normalizedStyles);
         }
@@ -123,8 +98,17 @@ module.exports = {
             const finalHtml = await renderer.renderView(manifest.routes['GET /'], {}, null);
             log('Received final page HTML:', finalHtml);
             
-            check(finalHtml.includes('<header>My App</header>'), 'Header component should be injected into layout.');
-            check(finalHtml.includes('<style data-component-name="header">'), 'Style tag for header should be added to head.');
+            // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
+            // Используем регулярное выражение, чтобы игнорировать атрибуты
+            check(
+                /<header[^>]*>My App<\/header>/.test(finalHtml), 
+                'Header component should be injected into layout.'
+            );
+            
+            check(
+                /<style data-component-name="header">/.test(finalHtml), 
+                'Style tag for header should be added to head.'
+            );
         }
     }
 };
