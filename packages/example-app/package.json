@@ -13,7 +13,7 @@
     "seed": "node seed.js"
   },
     "dependencies": {
-    "axle-llm": "1.2.3",
+    "axle-llm": "1.2.4",
     "bcrypt": "6.0.0",
     "wise-json-db": "6.0.2"
     },
