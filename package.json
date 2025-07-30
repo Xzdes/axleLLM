@@ -10,6 +10,10 @@
     "package": "npm run package --workspace=example-app",
     "test": "node ./tests/run-all-tests.js"
   },
+
+    "dependencies": {
+    "ws": "8.18.0"
+  },
   "workspaces": [
     "packages/*"
   ],
