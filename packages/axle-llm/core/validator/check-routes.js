@@ -16,6 +16,11 @@ function validateRoutes(manifest, appPath) {
   const connectorNames = Object.keys(manifest.connectors || {});
   const actionNames = Object.keys(routes).filter(key => routes[key].type === 'action');
 
+  // ★★★ НАЧАЛО НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
+  // Валидируем секцию custom bridge перед проверкой роутов
+  _validateCustomBridge(manifest.bridge, appPath);
+  // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
+
   for (const key in routes) {
     const route = routes[key];
     const category = `Route '${key}'`;
@@ -33,26 +38,42 @@ function validateRoutes(manifest, appPath) {
   }
 }
 
+// ★★★ НАЧАЛО НОВОЙ ФУНКЦИИ ★★★
+/**
+ * Проверяет секцию `bridge.custom` в манифесте.
+ * @private
+ */
+function _validateCustomBridge(bridgeConfig, appPath) {
+  const customModules = bridgeConfig?.custom || {};
+  for (const moduleName in customModules) {
+    const fileName = customModules[moduleName];
+    const category = `Bridge Module '${moduleName}'`;
+    if (typeof fileName !== 'string' || !fileName.endsWith('.js')) {
+      addIssue('error', category, `Invalid file path specified: '${fileName}'. Path must be a string ending with .js.`);
+      continue;
+    }
+    const modulePath = path.join(appPath, 'app', 'bridge', fileName);
+    checkFileExists(modulePath, category, `module file '${fileName}'`);
+  }
+}
+// ★★★ КОНЕЦ НОВОЙ ФУНКЦИИ ★★★
+
+
 /**
  * Вспомогательная функция для валидации `view`-роута.
  * @private
  */
 function _validateViewRoute(route, category, componentNames, connectorNames) {
-  // Проверка `layout`
   if (!route.layout) {
     addIssue('error', category, `View route is missing the required 'layout' property.`);
   } else if (!componentNames.includes(route.layout)) {
     addIssue('error', category, `Layout component '${route.layout}' is not defined.`, _getSuggestion(route.layout, componentNames));
   }
-
-  // Проверка `reads`
   (route.reads || []).forEach(name => {
     if (!connectorNames.includes(name)) {
       addIssue('error', category, `Read connector '${name}' is not defined.`, _getSuggestion(name, connectorNames));
     }
   });
-
-  // Проверка `inject`
   for (const placeholder in (route.inject || {})) {
     const componentName = route.inject[placeholder];
     if (!componentNames.includes(componentName)) {
@@ -66,17 +87,14 @@ function _validateViewRoute(route, category, componentNames, connectorNames) {
  * @private
  */
 function _validateActionRoute(route, category, componentNames, connectorNames, actionNames, appPath) {
-  // Пропускаем проверку для внутренних экшенов, у них нет `update` или `redirect`.
   if (route.internal === true) return;
   
-  // Проверка `reads` и `writes`
   [...(route.reads || []), ...(route.writes || [])].forEach(name => {
     if (!connectorNames.includes(name)) {
       addIssue('error', category, `Connector '${name}' is not defined.`, _getSuggestion(name, connectorNames));
     }
   });
   
-  // Проверка `update`
   if (route.update && !componentNames.includes(route.update)) {
     addIssue('error', category, `Update component '${route.update}' is not defined.`, _getSuggestion(route.update, componentNames));
   }
@@ -94,7 +112,6 @@ function _validateActionRoute(route, category, componentNames, connectorNames, a
     );
   }
 
-  // Рекурсивная проверка `steps`
   _checkSteps(route.steps || [], category, actionNames, appPath);
 }
 
@@ -107,14 +124,11 @@ function _checkSteps(steps, category, actionNames, appPath) {
     if (step.then) _checkSteps(step.then, category, actionNames, appPath);
     if (step.else) _checkSteps(step.else, category, actionNames, appPath);
     
-    // Проверка для старого шага "run"
     if (step.run) {
       const runPath = path.join(appPath, 'app', 'actions', `${step.run}.js`);
       checkFileExists(runPath, category, `run script '${step.run}.js'`);
     }
 
-    // ★★★ НАЧАЛО НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
-    // Проверка для нового шага "run:set"
     if (step['run:set']) {
       const handlerName = step.handler;
       if (!handlerName) {
@@ -127,7 +141,6 @@ function _checkSteps(steps, category, actionNames, appPath) {
         addIssue('warning', category, `Step 'run:set' is missing the 'with' property.`, `The handler '${handlerName}' will be called with 'undefined' as an argument.`);
       }
     }
-    // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
     
     if (step['action:run'] && step['action:run'].name) {
       const actionName = step['action:run'].name;
