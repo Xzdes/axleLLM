@@ -157,16 +157,9 @@ module.exports = {
         }
     },
 
-    // ★★★ НАЧАЛО НОВОГО ТЕСТА ★★★
     'ActionEngine: Step "bridge:call" for a server module should execute it and save the result': {
         options: {
-            manifest: {
-                bridge: {
-                    custom: {
-                        'utils': 'utils.js'
-                    }
-                }
-            },
+            manifest: { bridge: { custom: { 'utils': 'utils.js' } } },
             files: {
                 'app/bridge/utils.js': `
                     const fs = require('fs');
@@ -186,24 +179,45 @@ module.exports = {
             const assetLoader = new AssetLoader(appPath, manifest);
             const initialContext = { data: { prefix: 'user' }, _internal: {} };
             const engine = new ActionEngine(initialContext, appPath, assetLoader, null);
-            
-            const steps = [
-                {
-                    "bridge:call": {
-                        "api": "custom.utils.generateId",
-                        "args": "[data.prefix]",
-                        "resultTo": "data.newUserId"
-                    }
-                }
-            ];
-
+            const steps = [ { "bridge:call": { "api": "custom.utils.generateId", "args": "[data.prefix]", "resultTo": "data.newUserId" } } ];
             await engine.run(steps);
             const finalContext = engine.context;
             log('Final context for server bridge test:', finalContext);
-
             check(finalContext.data.newUserId, 'Result from bridge call should be set to context.');
             check(finalContext.data.newUserId.startsWith('user-'), 'The result should have the correct format.');
         }
+    },
+
+    // ★★★ НАЧАЛО НОВОГО ТЕСТА ★★★
+    'ActionEngine: Steps "log" and "log:value" should output to console': {
+        options: { manifest: {}, files: {} },
+        async run(appPath) {
+            // Перехватываем console.log, чтобы проверить его вывод
+            const originalLog = console.log;
+            const logs = [];
+            console.log = (...args) => {
+                logs.push(args.join(' '));
+            };
+
+            const initialContext = { data: { user: { name: 'Alice' } } };
+            const engine = new ActionEngine(initialContext, appPath, null, null);
+            const steps = [
+                { "log": "Starting user processing..." },
+                { "log:value": "data.user" }
+            ];
+            await engine.run(steps);
+
+            // Возвращаем оригинальный console.log
+            console.log = originalLog;
+            
+            log("Captured logs:", logs);
+
+            const simpleLog = logs.find(l => l.includes('Starting user processing...'));
+            const valueLog = logs.find(l => l.includes('data.user ='));
+            
+            check(simpleLog, 'Step "log" should output a simple message.');
+            check(valueLog, 'Step "log:value" should output a variable name and its value.');
+            check(valueLog && valueLog.includes('"name": "Alice"'), 'The value log should contain the correct JSON representation.');
+        }
     }
-    // ★★★ КОНЕЦ НОВОГО ТЕСТА ★★★
 };

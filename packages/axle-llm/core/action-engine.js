@@ -49,6 +49,18 @@ class ActionEngine {
       const stepType = Object.keys(step)[0];
 
       switch (stepType) {
+        case 'log': {
+          console.log(`\n[axle-log] 💬 ${step.log}\n`);
+          break;
+        }
+
+        case 'log:value': {
+          const valueToLog = evaluate(step['log:value'], this.context, this.appPath);
+          const output = JSON.stringify(valueToLog, null, 2);
+          console.log(`\n[axle-log] 💡 ${step['log:value']} = ${output}\n`);
+          break;
+        }
+
         case 'set': {
           const value = evaluate(step.to, this.context, this.appPath);
           this._setValue(step.set, value);
@@ -97,9 +109,16 @@ class ActionEngine {
         
         case 'action:run': {
           const subActionName = step['action:run'].name;
-          const subContext = { user: this.context.user, body: this.context.body, data: this.context.data };
-          const resultContext = await this.requestHandler.runAction(subActionName, subContext);
-          this.context.data = resultContext.data;
+          const subContext = { 
+            user: this.context.user, 
+            body: this.context.body, 
+            data: this.context.data,
+            routeName: subActionName 
+          };
+          
+          const result = await this.requestHandler.runAction(subContext);
+          
+          this.context.data = result.data;
           break;
         }
         
@@ -117,44 +136,49 @@ class ActionEngine {
           break;
         }
         
-        // ★★★ НАЧАЛО КЛЮЧЕВОГО ИЗМЕНЕНИЯ ★★★
         case 'bridge:call': {
           const callDetails = step['bridge:call'];
-          const [apiGroup, moduleName, methodName] = callDetails.api.split('.');
-          const evaluatedArgs = evaluate(callDetails.args, this.context, this.appPath);
-          const argsArray = Array.isArray(evaluatedArgs) ? evaluatedArgs : [evaluatedArgs];
+          const apiParts = callDetails.api.split('.');
+          const apiGroup = apiParts[0];
 
-          // --- Логика для Серверного Моста ---
+          const evaluatedArgs = evaluate(callDetails.args, this.context, this.appPath);
+          
           if (apiGroup === 'custom') {
+            const [_, moduleName, methodName] = apiParts;
             const bridgeModule = this.assetLoader.getBridgeModule(moduleName);
-            if (!bridgeModule) {
-              throw new Error(`Server Bridge module '${moduleName}' is not loaded or registered in manifest.`);
-            }
+            if (!bridgeModule) throw new Error(`Server Bridge module '${moduleName}' is not loaded.`);
             const method = bridgeModule[methodName];
-            if (typeof method !== 'function') {
-              throw new Error(`Method '${methodName}' not found or is not a function in Server Bridge module '${moduleName}'.`);
-            }
-            // Выполняем метод модуля немедленно
+            if (typeof method !== 'function') throw new Error(`Method '${methodName}' not found in module '${moduleName}'.`);
+            
+            const argsArray = Array.isArray(evaluatedArgs) ? evaluatedArgs : [evaluatedArgs];
             const result = await method(...argsArray);
             
-            // Если есть куда сохранить результат, сохраняем его
             if (callDetails.resultTo) {
               this._setValue(callDetails.resultTo, result);
             }
           } 
-          // --- Логика для Клиентского Моста (без изменений) ---
           else {
-            if (!this.context._internal.bridgeCalls) {
-              this.context._internal.bridgeCalls = [];
+            if (callDetails.await) {
+              this.context._internal.awaitingBridgeCall = {
+                details: {
+                  api: callDetails.api,
+                  args: evaluatedArgs,
+                },
+                resultTo: callDetails.resultTo
+              };
+              this.context._internal.interrupt = true; 
+            } else {
+              if (!this.context._internal.bridgeCalls) {
+                this.context._internal.bridgeCalls = [];
+              }
+              this.context._internal.bridgeCalls.push({
+                api: callDetails.api,
+                args: evaluatedArgs
+              });
             }
-            this.context._internal.bridgeCalls.push({
-              api: callDetails.api,
-              args: evaluatedArgs // Для клиента передаем как было, не массивом
-            });
           }
           break;
         }
-        // ★★★ КОНЕЦ КЛЮЧЕВОГО ИЗМЕНЕНИЯ ★★★
 
         case 'auth:login':
           this.context._internal.loginUser = evaluate(step['auth:login'], this.context, this.appPath);

@@ -3,6 +3,8 @@
   'use strict';
   let socketId = null;
   let currentSearchController = null;
+  let ws = null; // Делаем WebSocket доступным глобально в модуле
+
   function initialize() {
     console.log('[axle-client] Initializing...');
     const supportedEvents = ['click', 'submit', 'input', 'change'];
@@ -13,6 +15,7 @@
     initializeWebSocket();
     console.log('[axle-client] Initialized successfully.');
   }
+
   async function handleAction(event) {
     const element = event.target.closest('[atom-action]');
     if (!element) return;
@@ -46,6 +49,7 @@
       console.error(`[axle-client] Action failed for "${action}":`, error);
     }
   }
+
   async function handleSpaNavigation(event, directTarget = null) {
     const link = directTarget || event.target.closest('a[atom-link="spa"]');
     if (!link) return;
@@ -53,7 +57,7 @@
     const targetUrl = new URL(link.href);
     if (window.location.href === targetUrl.href) return;
     try {
-        const response = await fetch(targetUrl.href, { headers: { 'X-Requested-with': 'axleLLM-SPA' } });
+        const response = await fetch(targetUrl.href, { headers: { 'X-Requested-With': 'axleLLM-SPA' } });
         if (!response.ok) throw new Error(`SPA navigation failed: ${response.status}`);
         const payload = await response.json();
         if (payload.redirect) {
@@ -76,6 +80,7 @@
         window.location.href = targetUrl.href;
     }
   }
+
   function _spaRedirect(url) {
     const fakeLink = document.createElement('a');
     fakeLink.href = url;
@@ -83,13 +88,14 @@
     const fakeEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
     handleSpaNavigation(fakeEvent, fakeLink);
   }
-  function _processServerPayload(payload, targetSelector, triggerElement) {
+
+  async function _processServerPayload(payload, targetSelector, triggerElement) {
     if (payload.redirect) { _spaRedirect(payload.redirect); return; }
     
+    // --- Обработка "fire-and-forget" вызовов ---
     if (payload.bridgeCalls && Array.isArray(payload.bridgeCalls)) {
         if (window.axle && window.axle.bridge) {
             payload.bridgeCalls.forEach(call => {
-                console.log(`[axle-client] Executing bridge call:`, call);
                 window.axle.bridge.call(call.api, call.args)
                     .then(result => console.log(`[axle-bridge] Call to '${call.api}' successful.`, result))
                     .catch(err => console.error(`[axle-bridge] Call to '${call.api}' failed.`, err));
@@ -99,16 +105,46 @@
         }
     }
 
+    // --- Обработка ИНТЕРАКТИВНЫХ вызовов ---
+    if (payload.awaitingBridgeCall) {
+        if (window.axle && window.axle.bridge && ws && ws.readyState === WebSocket.OPEN) {
+            const call = payload.awaitingBridgeCall;
+            try {
+                // Выполняем вызов и ЖДЕМ результата от пользователя
+                const result = await window.axle.bridge.call(call.api, call.args);
+                
+                // Отправляем результат обратно на сервер по WebSocket
+                ws.send(JSON.stringify({
+                    type: 'bridge_call_response',
+                    payload: {
+                        callId: call.callId,
+                        result: result
+                    }
+                }));
+            } catch(err) {
+                console.error(`[axle-bridge] Awaitable call to '${call.api}' failed.`, err)
+                // Отправляем ошибку обратно
+                ws.send(JSON.stringify({
+                    type: 'bridge_call_response',
+                    payload: {
+                        callId: call.callId,
+                        error: err.message
+                    }
+                }));
+            }
+        } else {
+             console.error('[axle-client] Received an awaitable bridge call but window.axle.bridge or WebSocket is not available!');
+        }
+    }
+
     if (payload.html && targetSelector) {
       const targetElement = document.querySelector(targetSelector);
       if (!targetElement) { console.error(`[axle-client] Target element "${targetSelector}" not found.`); return; }
       
-      // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
       const activeElement = document.activeElement;
       const shouldPreserveFocus = activeElement && activeElement.id && targetElement.contains(activeElement);
       let activeElementId, selectionStart, selectionEnd;
       
-      // Шаг 1: Запоминаем не только ID, но и положение каретки
       if (shouldPreserveFocus) {
         activeElementId = activeElement.id;
         selectionStart = activeElement.selectionStart;
@@ -127,20 +163,18 @@
         styleTag.textContent = payload.styles;
       }
       
-      // Шаг 2: Восстанавливаем фокус и положение каретки
       if (activeElementId) {
         const newActiveElement = document.getElementById(activeElementId);
         if (newActiveElement) {
           newActiveElement.focus();
-          // Проверяем, что у элемента есть метод для установки выделения (для инпутов он есть)
           if (typeof newActiveElement.setSelectionRange === 'function') {
             newActiveElement.setSelectionRange(selectionStart, selectionEnd);
           }
         }
       }
-      // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
     }
   }
+
   function _updateStylesForSpa(styles) {
     document.querySelectorAll('style[data-component-name]').forEach(tag => tag.remove());
     (styles || []).forEach(styleInfo => {
@@ -150,6 +184,7 @@
         document.head.appendChild(styleTag);
     });
   }
+
   function _getActionBody(element) {
     const form = element.closest('form');
     const data = {};
@@ -160,10 +195,12 @@
     if (element.name && element.value !== undefined) { data[element.name] = element.value; }
     return JSON.stringify(data);
   }
+
   function initializeWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
-    const ws = new WebSocket(wsUrl);
+    ws = new WebSocket(wsUrl);
+
     ws.onopen = () => { console.log('[axle-client] WebSocket connection established.'); };
     ws.onmessage = (message) => {
       try {
@@ -177,6 +214,12 @@
           });
           return;
         }
+        // Сервер может прислать новый HTML для обновления части страницы
+        if (data.type === 'html_update' && data.payload) {
+            _processServerPayload(data.payload, data.payload.targetSelector);
+            return;
+        }
+        // Любое другое событие, на которое подписан компонент
         if (data.event) {
           document.querySelectorAll(`[atom-on-event="${data.event}"]`).forEach(element => {
             const fakeEvent = new Event('click', { bubbles: true, cancelable: true });
@@ -188,12 +231,15 @@
     ws.onclose = () => {
       console.log('[axle-client] WebSocket connection closed. Reconnecting in 3 seconds...');
       socketId = null;
+      ws = null;
       setTimeout(initializeWebSocket, 3000);
     };
     ws.onerror = (error) => { console.error('[axle-client] WebSocket error:', error); ws.close(); };
   }
+
   window.addEventListener('popstate', (event) => {
     if (event.state && event.state.spaUrl) { _spaRedirect(event.state.spaUrl); }
   });
+  
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initialize); } else { initialize(); }
 })();
