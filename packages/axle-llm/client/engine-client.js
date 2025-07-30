@@ -53,7 +53,7 @@
     const targetUrl = new URL(link.href);
     if (window.location.href === targetUrl.href) return;
     try {
-        const response = await fetch(targetUrl.href, { headers: { 'X-Requested-With': 'axleLLM-SPA' } });
+        const response = await fetch(targetUrl.href, { headers: { 'X-Requested-with': 'axleLLM-SPA' } });
         if (!response.ok) throw new Error(`SPA navigation failed: ${response.status}`);
         const payload = await response.json();
         if (payload.redirect) {
@@ -86,12 +86,10 @@
   function _processServerPayload(payload, targetSelector, triggerElement) {
     if (payload.redirect) { _spaRedirect(payload.redirect); return; }
     
-    // ★★★ НОВАЯ ФУНКЦИОНАЛЬНОСТЬ: ОБРАБОТКА ВЫЗОВОВ МОСТА ★★★
     if (payload.bridgeCalls && Array.isArray(payload.bridgeCalls)) {
         if (window.axle && window.axle.bridge) {
             payload.bridgeCalls.forEach(call => {
                 console.log(`[axle-client] Executing bridge call:`, call);
-                // Мы не ждем ответа от моста. Пока это fire-and-forget.
                 window.axle.bridge.call(call.api, call.args)
                     .then(result => console.log(`[axle-bridge] Call to '${call.api}' successful.`, result))
                     .catch(err => console.error(`[axle-bridge] Call to '${call.api}' failed.`, err));
@@ -100,20 +98,25 @@
             console.error('[axle-client] Received bridge calls but window.axle.bridge is not available!');
         }
     }
-    // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
 
     if (payload.html && targetSelector) {
       const targetElement = document.querySelector(targetSelector);
       if (!targetElement) { console.error(`[axle-client] Target element "${targetSelector}" not found.`); return; }
+      
+      // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
       const activeElement = document.activeElement;
       const shouldPreserveFocus = activeElement && activeElement.id && targetElement.contains(activeElement);
       let activeElementId, selectionStart, selectionEnd;
+      
+      // Шаг 1: Запоминаем не только ID, но и положение каретки
       if (shouldPreserveFocus) {
         activeElementId = activeElement.id;
         selectionStart = activeElement.selectionStart;
         selectionEnd = activeElement.selectionEnd;
       }
+      
       targetElement.innerHTML = payload.html;
+      
       if (payload.styles && payload.componentName) {
         let styleTag = document.querySelector(`style[data-component-name="${payload.componentName}"]`);
         if (!styleTag) {
@@ -123,15 +126,19 @@
         }
         styleTag.textContent = payload.styles;
       }
+      
+      // Шаг 2: Восстанавливаем фокус и положение каретки
       if (activeElementId) {
         const newActiveElement = document.getElementById(activeElementId);
         if (newActiveElement) {
           newActiveElement.focus();
-          if (typeof typeof newActiveElement.setSelectionRange === 'function') {
+          // Проверяем, что у элемента есть метод для установки выделения (для инпутов он есть)
+          if (typeof newActiveElement.setSelectionRange === 'function') {
             newActiveElement.setSelectionRange(selectionStart, selectionEnd);
           }
         }
       }
+      // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
     }
   }
   function _updateStylesForSpa(styles) {

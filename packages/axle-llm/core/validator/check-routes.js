@@ -81,7 +81,7 @@ function _validateActionRoute(route, category, componentNames, connectorNames, a
     addIssue('error', category, `Update component '${route.update}' is not defined.`, _getSuggestion(route.update, componentNames));
   }
   
-  // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ★★★
+  // ★★★ ЕДИНСТВЕННО ВЕРНАЯ ЛОГИКА ПРОВЕРКИ ★★★
   // Проверка логического завершения экшена
   const stringifiedSteps = JSON.stringify(route.steps || []);
   const hasRedirect = stringifiedSteps.includes('"client:redirect"');
@@ -92,10 +92,11 @@ function _validateActionRoute(route, category, componentNames, connectorNames, a
       'error', 
       category, 
       `Action must have a terminating operation.`, 
+      // Эта строка с подсказкой - ключевой индикатор, что работает верная логика
       `Provide an 'update' property, a 'client:redirect' step, or a 'bridge:call' step.`
     );
   }
-  // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
+  // ★★★ КОНЕЦ ★★★
 
   // Рекурсивная проверка `steps`
   _checkSteps(route.steps || [], category, actionNames, appPath);
