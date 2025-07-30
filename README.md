@@ -1,137 +1,175 @@
-# axleLLM Engine
 
-**axleLLM** is a declarative, Node.js-based engine for building native, cross-platform desktop applications using web technologies. It is specifically architected to streamline development in the era of Large Language Models (LLMs) by shifting the paradigm from imperative coding to declarative architecture definition.
+# axleLLM Engine v1.0
 
-With `axleLLM`, the entire application—from data sources and UI components to native OS integrations and business logic—is defined in a single, centralized `manifest.js` file. This approach transforms the LLM from a "junior developer" prone to context-loss errors into a "system architect" that designs robust applications with high predictability and security.
+**axleLLM** — это декларативный движок на базе Node.js и Electron для создания нативных, кроссплатформенных десктопных приложений с использованием веб-технологий. Его архитектура специально спроектирована для эпохи больших языковых моделей (LLM), смещая парадигму с императивного кодирования на декларативное описание архитектуры.
 
-*   **Repository:** [https://github.com/Xzdes/axleLLM](https://github.com/Xzdes/axleLLM)
-*   **NPM Package:** [https://www.npmjs.com/package/axle-llm](https://www.npmjs.com/package/axle-llm)
+С `axleLLM` все приложение — от источников данных и UI-компонентов до интеграции с ОС и бизнес-логики — определяется в едином, централизованном файле `manifest.js`. Этот подход превращает LLM из "младшего разработчика", склонного к ошибкам из-за потери контекста, в "системного архитектора", который проектирует надежные, безопасные и легко проверяемые приложения.
 
----
-
-## 🎯 Core Philosophy: Architecture Over Code
-
-Modern LLMs excel at generating code snippets but often struggle with the contextual complexity of a multi-file application. `axleLLM` solves this by abstracting away the "how" (imperative code) and focusing on the "what" (declarative architecture).
-
-1.  **Declarative by Default:** Instead of writing functions to connect to a database or handle a file dialog, you *declare* these resources and their configurations in the manifest. This allows the underlying implementation to be swapped without altering the application's business logic.
-
-2.  **The Manifest as the Single Source of Truth:** The `manifest.js` file is the complete architectural blueprint of the application. This centralized model provides full context to both human developers and LLMs, dramatically reducing cognitive load and eliminating a wide class of contextual errors.
-
-3.  **Secure by Design:** The web-based UI (Renderer Process) is completely sandboxed from Node.js APIs. All access to the operating system—such as file system interactions or printing—is strictly controlled through a declarative "Native Bridge" defined in the manifest. The LLM cannot generate or execute arbitrary system commands.
-
-> **Result:** A development workflow where an LLM interacts with a single, structured file (`manifest.js`) to produce predictable, secure, and easily verifiable native desktop applications.
+*   **Репозиторий:** [https://github.com/Xzdes/axleLLM](https://github.com/Xzdes/axleLLM)
+*   **NPM Пакет:** [https://www.npmjs.com/package/axle-llm](https://www.npmjs.com/package/axle-llm)
 
 ---
 
-## 🚀 Getting Started
+## 🎯 Ключевые Особенности
 
-`axleLLM` is a monorepo containing the core engine and an example application.
+*   **Декларативная Архитектура:** Всё приложение описывается как единый объект в `manifest.js`. Никаких "точек входа" или сложной связки модулей.
+*   **Интегрированный Валидатор:** Встроенная система "супер-валидации" проверяет всю архитектуру манифеста *до* запуска, предотвращая 90% ошибок времени выполнения и предоставляя полезные подсказки.
+*   **Горячая Перезагрузка:** Движок в режиме разработки отслеживает изменения во всех файлах проекта (включая манифест) и мгновенно перезагружает приложение.
+*   **Изолированные Стили (Scoped CSS):** Стили для компонентов автоматически изолируются, что предотвращает конфликты и позволяет создавать по-настоящему независимые UI-блоки.
+*   **Real-time UI:** Встроенный WebSocket-движок позволяет компонентам "подписываться" на изменения в источниках данных и обновляться в реальном времени без написания сложного клиентского кода.
+*   **Декларативная Темизация:** Внешний вид всего приложения управляется через CSS-переменные, объявленные в секции `themes` манифеста.
+*   **Декларативный Нативный Мост:** Самая мощная часть движка. Безопасный, контролируемый "белым списком" в манифесте, способ вызывать нативные API операционной системы (диалоги, shell, принтеры и т.д.) и собственные Node.js модули прямо из декларативных `steps`.
 
-*   `packages/axle-llm`: The core engine, published to NPM.
-*   `packages/example-app`: A fully functional cashier application that demonstrates the engine's capabilities.
+---
 
-### Installation and First Run
+## 🚀 Рабочий Цикл: Разработка, Тестирование, Сборка
 
-To explore the project and run the example application locally:
+`axleLLM` предоставляет полный набор инструментов для всего жизненного цикла приложения.
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/Xzdes/axleLLM.git
-cd axleLLM
+1.  **Наполнение Данными (`seed`):**
+    ```bash
+    # Запускает скрипт seed.js для наполнения базы данных начальными данными
+    npm run seed --workspace=example-app
+    ```
+2.  **Разработка (`dev`):**
+    ```bash
+    # Запускает валидатор, а затем приложение с DevTools и горячей перезагрузкой
+    npm run dev
+    ```
+3.  **Тестирование (`test`):**
+    ```bash
+    # Запускает все *.test.js файлы в полностью изолированном окружении
+    npm run test
+    ```
+4.  **Сборка (`package`):**
+    ```bash
+    # Собирает ваше приложение в готовый .exe, .dmg или .AppImage для распространения
+    npm run package
+    ```
 
-# 2. Install all dependencies for the monorepo
-# This will install dependencies for the engine and the example app,
-# and link them together.
-npm install
+---
 
-# 3. Seed the database for the example app
-# This populates the local database with products and a default user.
-npm run seed --workspace=example-app
+## 📖 Архитектурный План: `manifest.js`
 
-# 4. Run the application in development mode
-npm run dev```
-This will launch the cashier application in a native window with hot-reloading enabled.
+`manifest.js` — это сердце любого `axleLLM` приложения. Он экспортирует единый объект конфигурации.
 
-### Development Workflow: The Validate-Launch Loop
+### Основные Секции
 
-The core of the `axleLLM` development experience is its integrated workflow. Any change begins with editing the manifest and ends with a validation check.
+| Секция | Описание |
+| :--- | :--- |
+| **`launch`** | Конфигурация главного окна приложения (размеры, заголовок). |
+| **`themes`** | Декларативная система темизации. Определяет глобальные CSS-переменные. |
+| **`globals`** | Глобальные переменные, доступные во всех UI-компонентах. |
+| **`auth`** | Настройки встроенной системы аутентификации. |
+| **`sockets`** | Конфигурация WebSocket-каналов для real-time обновлений. |
+| **`connectors`** | Декларация всех источников данных (`wise-json-db`, `in-memory`). |
+| **`components`** | Реестр всех UI-компонентов (HTML-шаблоны и их изолированные CSS-стили). |
+| **`bridge`** | **Декларативный Нативный Мост.** "Белый список" всех функций ОС и кастомных модулей, доступных приложению. |
+| **`routes`** | Мозг приложения. Связывает URL и действия (`action`) с UI-компонентами и бизнес-логикой (`steps`). |
 
-#### **Step 1: Modify the Manifest**
-All application features—from adding a new UI component to defining a new native function—start in `manifest.js` or its constituent parts in the `/manifest` directory.
+### Бизнес-логика через `steps`
 
-#### **Step 2: Run the Development Server**
-The validation process is integrated directly into the development command.
+В `axleLLM` бизнес-логика описывается не в виде функций, а как последовательный массив `steps` внутри `action`-роута.
 
-```bash
-# This single command runs the validator first, then launches the app.
-npm run dev
+**Доступные Шаги:**
+
+| Шаг | Описание |
+| :--- | :--- |
+| `{ "set": "path", "to": "expr" }` | Присваивает значение переменной в контексте. |
+| `{ "if": "cond", "then": [...], "else": [...] }` | Условное ветвление логики. |
+| `{ "run": "script" }` | Выполняет JS-файл из `app/actions/` для сложной логики, которая мутирует глобальный контекст. |
+| `{ "run:set": "path", "handler": "script", "with": [...] }` | Выполняет "чистую функцию" из `app/actions/`, передает ей аргументы из `with` и сохраняет возвращенное значение. |
+| `{ "action:run": { "name": "route" } }` | Вызывает другой `action`-роут, позволяя создавать переиспользуемые цепочки логики. |
+| `{ "bridge:call": { ... } }` | Вызывает функцию Нативного Моста (клиентского или серверного). |
+| `{ "try": [...], "catch": [...] }` | Позволяет перехватывать и обрабатывать ошибки во время выполнения шагов. |
+| `{ "auth:login": "userObj" }` | Создает сессию для пользователя. |
+| `{ "auth:logout": true }` | Завершает текущую сессию пользователя. |
+| `{ "client:redirect": "'/path'" }` | Перенаправляет пользователя на другую страницу (SPA-навигация). |
+
+---
+
+## 🏛️ UI и Нативный Мост
+
+### UI-Архитектура
+
+UI построен на принципе "HTML-по-проводам" (HTML-over-the-wire). Сервер всегда отправляет готовый к отображению HTML, а клиентский скрипт `engine-client.js` лишь интеллектуально заменяет нужные блоки в DOM. HTML дополняется специальными `atom-*` атрибутами:
+
+*   `atom-action="METHOD /url"`: Вызывает `action`-роут на сервере.
+*   `atom-target="#css-selector"`: Указывает, какой DOM-элемент обновить ответом.
+*   `atom-event="input"`: Определяет событие-триггер (по умолчанию `click` или `submit`).
+*   `atom-socket="channelName"`: Подписывает компонент на WebSocket-канал.
+*   `atom-on-event="eventName"`: Вызывает `atom-action` при получении события по WebSocket.
+
+### Декларативный Нативный Мост
+
+Мост — это единственный способ для вашего приложения безопасно взаимодействовать с операционной системой. Существует два типа вызовов:
+
+**1. Клиентский Мост (Вызовы API Electron)**
+Используется для взаимодействия с UI операционной системы (диалоги, меню и т.д.). Вызов инициируется на сервере, но выполняется на клиенте.
+
+*Пример в `manifest.js`:*
+```javascript
+"bridge": {
+  "dialogs": { "showMessageBox": true }
+},
+"routes": {
+  "GET /show-info": {
+    "type": "action",
+    "steps": [{
+      "bridge:call": {
+        "api": "dialogs.showMessageBox",
+        "args": "{ title: 'Info', message: 'Hello from axleLLM!' }"
+      }
+    }]
+  }
+}
 ```
 
-*   **On Success:** If the manifest is architecturally sound, the application window launches.
-*   **On Failure:** The launch is aborted, and a clear, actionable list of errors is printed to the console, often with "Did you mean...?" suggestions for typos.
+**2. Серверный Мост (Кастомные Node.js Модули)**
+Используется для сложных интеграций (оборудование, работа с файлами, сторонние API). Модуль выполняется **немедленно на сервере**.
 
-While running, the engine watches for file changes. When a file is saved, the validator runs again. If it passes, the application is hot-reloaded. If it fails, the error is printed to the console without crashing the running application.
-
----
-
-## 📖 The `manifest.js` Blueprint
-
-The `manifest.js` file is the heart of every `axleLLM` application. It is a standard Node.js module that exports a single configuration object.
-
-### Key Sections
-
-| Section | Description |
-| :--- | :--- |
-| **`launch`** | Configures the main application window, native menu, and system tray icon. |
-| **`globals`** | Defines global variables accessible in all UI components via Mustache syntax. |
-| **`auth`** | Sets the fundamental parameters for the authentication system. |
-| **`sockets`** | Configures real-time WebSocket channels for live UI updates. |
-| **`connectors`** | Declares all data sources (`wise-json-db`, `in-memory`) for the application. |
-| **`components`** | Registers all UI "building blocks"—HTML templates and their scoped CSS styles. |
-| **`bridge`** | The **Declarative Native Bridge**. A whitelist of all native OS functions the application is permitted to call. |
-| **`routes`** | The application's brain. Maps `view` routes to UI compositions and `action` routes to business logic defined by `steps`. |
-
-### Logic via `steps`
-
-Business logic is not written in traditional functions but is declared as an array of sequential `steps` within an `action` route.
-
-**Available Steps:**
-*   `{ "set": "path.to.variable", "to": "expression" }`: Assigns a value.
-*   `{ "if": "condition", "then": [...], "else": [...] }`: Conditional logic.
-*   `{ "run": "scriptName" }`: Executes an external JavaScript file from `app/actions/` for complex logic.
-*   `{ "action:run": { "name": "routeName" } }`: Calls another `action` route, enabling reusable logic.
-*   `{ "bridge:call": { "api": "bridge.api.name", "args": {...} } }`: **Invokes a native function** defined in the `bridge`.
-*   `{ "auth:login": "userObject" }`: Creates a user session.
-*   `{ "auth:logout": true }`: Destroys the current user session.
-*   `{ "client:redirect": "'/path'" }`: Triggers a client-side SPA navigation.
+*Пример в `manifest.js`:*
+```javascript
+"bridge": {
+  "custom": { "fileUtils": "file-utils.js" }
+},
+"routes": {
+  "POST /save-file": {
+    "type": "action",
+    "steps": [{
+      "bridge:call": {
+        "api": "custom.fileUtils.saveTextFile",
+        "args": "['./report.txt', body.text]",
+        "resultTo": "context.saveResult" // Результат выполнения доступен в следующих шагах
+      }
+    }]
+  }
+}
+```
+*Соответствующий модуль `app/bridge/file-utils.js`:*
+```javascript
+const fs = require('fs/promises');
+module.exports = {
+  saveTextFile: async (filePath, content) => {
+    try {
+      await fs.writeFile(filePath, content);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+};
+```
 
 ---
 
-## 🏛️ UI and Theming
+## 🔮 Будущие Направления
 
-The UI is rendered using a "HTML-over-the-wire" approach. The server sends fully rendered HTMLpartials to the client, which intelligently swaps them into the DOM.
+Проект достиг стабильной версии 1.0, но всегда есть куда расти:
 
-### Atomic Attributes
-Plain HTML is enhanced with special `atom-*` attributes:
-*   `atom-action="METHOD /url"`: Triggers an `action` route on the server.
-*   `atom-target="#css-selector"`: Specifies which DOM element to update with the response.
-*   `atom-event="input"`: Defines which event triggers the action (default is `click` or `submit`).
-*   `atom-socket="channelName"`: Subscribes a component to a WebSocket channel for live updates.
-*   `atom-on-event="eventName"`: Triggers an `atom-action` when a specific event is received via WebSocket.
+*   [ ] **Расширение API Нативного Моста:** Добавление поддержки принтеров, системного трея, хранилища настроек.
+*   [ ] **Интерактивный CLI:** Создание команд `axle-cli generate ...` для ускорения разработки.
+*   [ ] **Система Автоматического Обновления:** Интеграция `electron-updater`.
+*   [ ] **Подробная Документация:** Создание выделенного сайта с документацией и примерами.
 
-### Server-Side Rendering Directives
-*   `atom-if="condition"`: An attribute that conditionally includes or removes an HTML element on the server before it is sent to the client.
-
-### Declarative Theming
-`axleLLM` promotes a declarative theming system via the `themes` section in `manifest.js`. You define theme variables (colors, sizes) in the manifest, and the engine makes them available as CSS variables (`var(--primary-bg)`) in all component stylesheets, allowing an LLM to change the application's entire look and feel by modifying a single object.
-
----
-
-## 🔮 Future Roadmap
-
-*   [ ] **Full Native Bridge Implementation:** Build out the handlers for the declared `bridge` APIs (`dialogs`, `printer`, `shell`).
-*   [ ] **Interactive CLI:** Create a `generate` command (`axle-cli generate component...`) to scaffold new files.
-*   [ ] **Packaging and Distribution:** Implement the `npm run package` command using `electron-builder` to create distributable `.exe`, `.dmg`, and `.AppImage` files.
-*   [ ] **Comprehensive Documentation:** Create a dedicated documentation website.
-
-This project is an experiment in the future of human-AI collaboration, aimed at building reliable and predictable software systems. Contributions and ideas are welcome.
+Этот проект — эксперимент в области будущего совместной работы человека и ИИ для создания надежных и предсказуемых программных систем. Вклад и идеи приветствуются.
