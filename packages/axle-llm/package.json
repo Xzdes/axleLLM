@@ -1,6 +1,6 @@
 {
   "name": "axle-llm",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "A declarative engine for building native desktop applications with web technologies, designed for LLM architects.",
   "main": "index.js",
   "bin": {
