@@ -1,15 +1,32 @@
 // packages/axle-llm/main.js
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron'); // Добавили shell
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const { createServerInstance } = require('./core/server');
 const { loadManifest } = require('./core/config-loader');
 const { default: getPort } = require('get-port');
 
 const isDev = process.argv.includes('--dev');
-const appPath = process.argv[2]; 
+
+// ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+// Определяем путь к приложению (appPath) в зависимости от режима запуска
+let appPath;
+if (isDev) {
+  // В режиме разработки мы ожидаем, что путь передан как аргумент
+  appPath = process.argv[2]; 
+} else {
+  // В собранном приложении appPath - это корень самого приложения.
+  // Electron автоматически распаковывает asar-архив при доступе.
+  appPath = app.getAppPath();
+}
+// ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+
 if (!appPath) {
-  console.error('[axle-main] Critical: Application path was not provided. Exiting.');
+  console.error('[axle-main] Critical: Application path was not provided or could not be determined. Exiting.');
+  // Для наглядности при запуске .exe добавим диалоговое окно
+  if (!app.isPackaged) {
+      dialog.showErrorBox('Critical Error', 'Application path was not provided. Exiting.');
+  }
   process.exit(1);
 }
 const manifest = loadManifest(appPath);
@@ -30,7 +47,6 @@ function setupBridge(win) {
       throw new Error(`[axle-bridge] API call blocked by manifest: '${api}' is not whitelisted.`);
     }
 
-    // ★★★ РАСШИРЕНИЕ ФУНКЦИОНАЛЬНОСТИ ★★★
     switch (apiGroup) {
       case 'dialogs':
         switch (apiMethod) {
@@ -44,19 +60,16 @@ function setupBridge(win) {
       case 'shell':
         switch (apiMethod) {
           case 'openExternal':
-            // openExternal не возвращает промис и выполняется асинхронно
             await shell.openExternal(args.url);
-            return { success: true }; // Возвращаем подтверждение
+            return { success: true };
           default:
             throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group '${apiGroup}'.`);
         }
-      // ★★★ КОНЕЦ РАСШИРЕНИЯ ★★★
       default:
         throw new Error(`[axle-bridge] Unknown API group: '${apiGroup}'.`);
     }
   });
 }
-
 
 if (isDev) {
   try {
