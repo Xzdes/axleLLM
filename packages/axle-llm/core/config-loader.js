@@ -1,27 +1,38 @@
 // packages/axle-llm/core/config-loader.js
-// Этот модуль отвечает за одну единственную вещь:
-// безопасно загрузить и вернуть объект манифеста из приложения пользователя.
-
 const path = require('path');
 const fs = require('fs');
 
 /**
- * Загружает manifest.js из корневой папки приложения пользователя.
- * @param {string} appPath - Абсолютный путь к приложению.
- * @returns {object} - Объект манифеста.
+ * "Умный" загрузчик манифеста.
+ * 1. Загружает корневой manifest.js.
+ * 2. Автоматически сканирует папку /manifest и подгружает все части.
+ * 3. Собирает их в единый, полный объект манифеста.
  */
 function loadManifest(appPath) {
   const manifestPath = path.join(appPath, 'manifest.js');
+  const manifestDir = path.join(appPath, 'manifest');
 
-  // Перед загрузкой очищаем кэш `require`, чтобы hot-reloader
-  // всегда получал самую свежую версию файла.
   try {
+    // Очищаем кэш для hot-reload
     delete require.cache[require.resolve(manifestPath)];
-    const manifest = require(manifestPath);
-    return manifest;
+    
+    // Загружаем корневой манифест (с launch, globals и т.д.)
+    const rootManifest = require(manifestPath);
+    
+    // Сканируем папку manifest/ и автоматически подгружаем все части
+    const parts = ['connectors', 'components', 'routes', 'bridge'];
+    for (const part of parts) {
+      const partPath = path.join(manifestDir, `${part}.js`);
+      if (fs.existsSync(partPath)) {
+        delete require.cache[require.resolve(partPath)];
+        rootManifest[part] = require(partPath);
+      }
+    }
+
+    return rootManifest;
+
   } catch (error) {
     console.error(`[ConfigLoader] CRITICAL: Failed to load manifest from ${manifestPath}.`);
-    // Пробрасываем ошибку наверх, чтобы движок мог ее поймать и остановить запуск.
     throw error;
   }
 }
