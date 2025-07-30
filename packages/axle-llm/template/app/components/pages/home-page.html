@@ -1,0 +1,15 @@
+<!-- Контейнер с ID важен, так как на него ссылается atom-target в кнопке -->
+<div id="homePage-container" style="text-align: center;">
+
+    <!-- Отображаем сообщение из нашего коннектора viewState -->
+    <h1>{{ data.viewState.message }}</h1>
+
+    <button 
+      atom-action="POST /action/change-message"
+      atom-target="#homePage-container"
+      style="padding: 10px 20px; font-size: 16px; cursor: pointer;"
+    >
+      Change Message
+    </button>
+    
+</div>
