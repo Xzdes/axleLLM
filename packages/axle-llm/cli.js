@@ -1,47 +1,83 @@
 #!/usr/bin/env node
 
-// Этот файл — точка входа для нашего командного интерфейса (CLI).
-// Он определяет, какую команду запустил пользователь (`dev`, `start` и т.д.)
-// и вызывает соответствующую внутреннюю логику движка.
-
+const fs = require('fs');
 const path = require('path');
 const { runDev, runStart, runPackage } = require('./core/commands');
 
-// process.argv содержит аргументы командной строки.
-// [0] = 'node', [1] = '.../cli.js', [2] = 'dev' (или другая команда)
 const command = process.argv[2];
+const appName = process.argv[3];
+const appPath = process.cwd(); // Путь, откуда вызвали команду
 
-// process.cwd() — это путь к папке, из которой была вызвана команда.
-// Для нас это будет корневая папка `example-app`.
-const appPath = process.cwd();
+// Цвета для вывода
+const C_RESET = '\x1b[0m';
+const C_GREEN = '\x1b[32m';
+const C_CYAN = '\x1b[36m';
 
-// Простой роутер для команд.
+// Роутер команд
 switch (command) {
+  case 'new':
+    if (!appName) {
+      console.error('Error: Please specify the project name.');
+      console.log('  For example:');
+      console.log('    npx axle-llm new my-app');
+      process.exit(1);
+    }
+    createNewApp(appName);
+    break;
   case 'dev':
-    // Вызываем функцию, отвечающую за режим разработки.
     runDev(appPath);
     break;
-
   case 'start':
-    // Вызываем функцию, отвечающую за запуск в продакшен-режиме.
     runStart(appPath);
     break;
-
   case 'package':
-    // Вызываем функцию, отвечающую за сборку дистрибутива.
     runPackage(appPath);
     break;
-
-  case 'help':
   default:
-    // Если команда не распознана или это 'help', показываем справку.
     showHelp();
     break;
 }
 
 /**
- * Отображает справочную информацию по использованию CLI.
+ * Функция для создания нового приложения.
  */
+function createNewApp(name) {
+  const projectDir = path.join(process.cwd(), name);
+  const templateDir = path.join(__dirname, 'template');
+
+  console.log(`Creating a new axleLLM app in ${C_GREEN}${projectDir}${C_RESET}...`);
+
+  // 1. Проверяем, не существует ли уже такая папка
+  if (fs.existsSync(projectDir)) {
+    console.error(`Error: Directory ${projectDir} already exists.`);
+    process.exit(1);
+  }
+
+  // 2. Копируем шаблон
+  fs.cpSync(templateDir, projectDir, { recursive: true });
+
+  // 3. Настраиваем package.json нового проекта
+  const packageJsonPath = path.join(projectDir, 'package.json');
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  
+  packageJson.name = name; // Заменяем плейсхолдер на реальное имя
+  
+  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+  console.log(`\n${C_GREEN}Success!${C_RESET} Created ${name} at ${projectDir}`);
+  console.log('Inside that directory, you can run several commands:\n');
+  
+  console.log(`  ${C_CYAN}npm install${C_RESET}`);
+  console.log('    Installs all dependencies.\n');
+  
+  console.log(`  ${C_CYAN}npm run dev${C_RESET}`);
+  console.log('    Starts the development server.\n');
+
+  console.log('We suggest that you begin by typing:\n');
+  console.log(`  ${C_CYAN}cd ${name}${C_RESET}`);
+  console.log(`  ${C_CYAN}npm install${C_RESET}`);
+}
+
 function showHelp() {
   console.log(`
   Usage: axle-cli <command>

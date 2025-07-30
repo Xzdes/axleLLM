@@ -9,6 +9,7 @@
   "files": [
     "core/",
     "client/",
+    "template/", 
     "cli.js",
     "index.js",
     "main.js"
