@@ -9,7 +9,6 @@ const { RequestHandler } = require('../packages/axle-llm/core/request-handler');
 const { ConnectorManager } = require('../packages/axle-llm/core/connector-manager');
 const { Renderer } = require('../packages/axle-llm/core/renderer');
 
-// ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
 // "Обучаем" нашу лог-функцию работать с BigInt.
 function log(message, data) {
     console.log(`\n[LOG] ${message}`);
@@ -19,7 +18,6 @@ function log(message, data) {
         console.log(JSON.stringify(data, replacer, 2));
     }
 }
-// ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
 
 function check(condition, description, actual) {
     if (condition) {
@@ -136,6 +134,51 @@ module.exports = {
 
             check(finalContext.data.cart.items.length === 2, 'The parent action should add an item to the cart.');
             check(finalContext.data.cart.total === 150, 'The internal action "calculateTotal" should have recalculated the total correctly.');
+        }
+    },
+
+    'ActionEngine: Step "try/catch" should handle runtime errors declaratively': {
+        options: {
+            manifest: {},
+            files: {} // Никакие файлы не нужны
+        },
+        async run(appPath) {
+            const initialContext = { data: { result: 'pending', errorMessage: '' } };
+            const engine = new ActionEngine(initialContext, appPath, null, null);
+
+            const steps = [
+                {
+                    "try": [
+                        // Этот шаг разработан, чтобы вызвать ошибку
+                        { "set": "data.invalid", "to": "JSON.parse('{not_json}')" },
+                        // Этот шаг никогда не должен выполниться
+                        { "set": "data.result", "to": "'try_succeeded'" }
+                    ],
+                    "catch": [
+                        { "set": "data.result", "to": "'caught_error'" },
+                        { "set": "data.errorMessage", "to": "error.message" }
+                    ]
+                }
+            ];
+
+            await engine.run(steps);
+            const finalContext = engine.context;
+            log('Final context after try/catch:', finalContext);
+
+            check(finalContext.data.result === 'caught_error', 'The "catch" block should have been executed.');
+            
+            // ★★★ УЛУЧШЕННЫЕ ПРОВЕРКИ ★★★
+            check(
+                finalContext.data.errorMessage.includes('in JSON'), 
+                'The original error message should be captured in the context.', 
+                finalContext.data.errorMessage
+            );
+            check(
+                !finalContext.data.errorMessage.includes('Step execution failed'), 
+                'The error message should be the original one, not the wrapped one.', 
+                finalContext.data.errorMessage
+            );
+            check(!finalContext.hasOwnProperty('error'), 'The "error" object should be cleaned up from the final context.');
         }
     }
 };

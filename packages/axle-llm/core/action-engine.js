@@ -6,26 +6,17 @@ const { z, ZodError } = require('zod');
 function evaluate(expression, context, appPath) {
   if (typeof expression !== 'string') return expression;
 
-  try {
-    const func = new Function('ctx', 'require', `
-      with (ctx) {
-        return (${expression});
-      }
-    `);
-    
-    const smartRequire = (moduleName) => require(require.resolve(moduleName, { paths: [appPath] }));
-    
-    context.zod = z;
-
-    return func(context, smartRequire);
-
-  } catch (error) {
-    if (error instanceof ZodError) {
-      throw error;
+  const func = new Function('ctx', 'require', `
+    with (ctx) {
+      return (${expression});
     }
-    console.warn(`[ActionEngine] Evaluate warning for expression "${expression}": ${error.message}`);
-    return undefined;
-  }
+  `);
+  
+  const smartRequire = (moduleName) => require(require.resolve(moduleName, { paths: [appPath] }));
+  
+  context.zod = z;
+
+  return func(context, smartRequire);
 }
 
 class ActionEngine {
@@ -83,29 +74,46 @@ class ActionEngine {
           }
           break;
         }
-
-        // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
+        
         case 'action:run': {
           const subActionName = step['action:run'].name;
           
-          // Создаем контекст для вложенного экшена.
-          // Он должен содержать user, body и ВЕСЬ текущий объект `data`.
           const subContext = {
             user: this.context.user,
             body: this.context.body,
-            data: this.context.data // Передаем весь объект data
+            data: this.context.data 
           };
 
-          // Вызываем `runAction` с этим контекстом.
           const resultContext = await this.requestHandler.runAction(subActionName, subContext);
           
-          // `runAction` теперь вернет измененный объект `data`,
-          // которым мы заменяем наш текущий `data`.
           this.context.data = resultContext.data;
           break;
         }
-        // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
         
+        case 'try': {
+          try {
+            if (step.try) await this.run(step.try);
+          } catch (error) {
+            // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
+            // Ищем исходную, "чистую" ошибку. Если ее нет, используем саму ошибку.
+            const originalError = error.cause || error;
+            
+            // Помещаем в контекст именно информацию об исходной ошибке.
+            this.context.error = {
+              message: originalError.message,
+              stack: originalError.stack,
+            };
+            
+            if (step.catch) {
+              await this.run(step.catch);
+            }
+            
+            // Гарантированно очищаем временный объект ошибки из контекста.
+            delete this.context.error;
+          }
+          break;
+        }
+
         case 'auth:login':
           this.context._internal.loginUser = evaluate(step['auth:login'], this.context, this.appPath);
           break;
@@ -129,7 +137,7 @@ class ActionEngine {
       }
     } catch (error) {
       const errorMessage = `Step execution failed! Step: ${JSON.stringify(step)}. Error: ${error.message}`;
-      console.error(`\n💥 [ActionEngine] ${errorMessage}\n`);
+      // Оборачиваем исходную ошибку, чтобы сохранить контекст о шаге, на котором она произошла.
       throw new Error(errorMessage, { cause: error });
     }
   }
