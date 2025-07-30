@@ -1,60 +1,49 @@
+
 {
-"name": "example-app",
-"version": "1.0.0",
-"private": true,
-"description": "An example cashier application built with the axleLLM engine.",
-"scripts": {
-"dev": "axle-cli dev",
-"start": "axle-cli start",
-"package": "axle-cli package",
-"seed": "node seed.js"
-},
-"dependencies": {
-"axle-llm": "1.2.1",
-"bcrypt": "^6.0.0",
-"wise-json-db": "^6.0.2"
-},
-"devDependencies": {
-"electron": "^37.2.4",
-"electron-builder": "^26.0.19"
-},
-"build": {
-"appId": "com.axlellm.example-app",
-"productName": "Атомарная Касса",
-"copyright": "Copyright © 2025 Xzdes",
-"asar": true,
-"files": [
-"!dist/",
-"!node_modules/",
-"axle-db-data/",
-"app/",
-"manifest/",
-"manifest.js",
-"package.json",
-{
-"from": "node_modules/axle-llm",
-"to": "node_modules/axle-llm"
-},
-{
-"from": "node_modules/bcrypt",
-"to": "node_modules/bcrypt"
-},
-{
-"from": "node_modules/wise-json-db",
-"to": "node_modules/wise-json-db"
+  "name": "example-app",
+  "version": "1.1.0",
+  "private": true,
+  "description": "An example cashier application built with the axleLLM engine.",
+  "author": "Xzdes",
+  "main": "node_modules/axle-llm/main.js",
+  "scripts": {
+    "dev": "axle-cli dev",
+    "start": "axle-cli start",
+    "package": "axle-cli package",
+    "seed": "node seed.js"
+  },
+    "dependencies": {
+    "axle-llm": "1.2.2",
+    "bcrypt": "6.0.0",
+    "wise-json-db": "6.0.2"
+    },
+    "devDependencies": {
+    "electron": "37.2.4",
+    "electron-builder": "26.0.19"
+  },
+  "build": {
+    "appId": "com.axlellm.example-app",
+    "productName": "Атомарная Касса",
+    "copyright": "Copyright © 2025 Xzdes",
+    "asar": true,
+    "files": [
+      "!dist/",
+      "app/",
+      "manifest/",
+      "manifest.js",
+      "axle-db-data/"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
 }
-],
-"win": {
-"target": "nsis",
-"icon": "assets/icon.ico"
-},
-"mac": {
-"target": "dmg",
-"icon": "assets/icon.icns"
-},
-"linux": {
-"target": "AppImage",
-"icon": "assets/icon.png"
-}
-}
-}
+
+
+

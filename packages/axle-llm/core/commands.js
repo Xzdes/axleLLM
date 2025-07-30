@@ -1,9 +1,10 @@
 // packages/axle-llm/core/commands.js
 
 const path = require('path');
+const fs = require('fs'); // ★★★ ДОБАВЛЯЕМ МОДУЛЬ FS ★★★
 const electron = require('electron');
 const { spawn } = require('child_process');
-const builder = require('electron-builder'); // ★★★ ДОБАВЛЯЕМ ЗАВИСИМОСТЬ ★★★
+const builder = require('electron-builder');
 
 const { loadManifest } = require('./config-loader');
 const validateManifest = require('./validator');
@@ -12,7 +13,7 @@ const C_RESET = '\x1b[0m';
 const C_RED = '\x1b[31m';
 const C_YELLOW = '\x1b[33m';
 const C_CYAN = '\x1b[36m';
-const C_GREEN = '\x1b[32m'; // ★★★ ДОБАВЛЯЕМ ЦВЕТ ★★★
+const C_GREEN = '\x1b[32m';
 
 function runDev(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in DEV mode...${C_RESET}`);
@@ -36,48 +37,56 @@ function runDev(appPath) {
 }
 
 function runStart(appPath) {
-  console.log(`${C_CYAN}[axle-cli] Starting in PRODUCTION mode... (Not implemented yet)${C_RESET}`);
-  // В будущем здесь будет запуск без DevTools и hot-reload.
+  console.log(`${C_CYAN}[axle-cli] Starting in PRODUCTION mode...${C_RESET}`);
   const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
-  const args = [mainProcessPath, appPath]; // Без флага --dev
+  const args = [mainProcessPath, appPath];
   const electronProcess = spawn(electron, args, { stdio: 'inherit' });
   electronProcess.on('close', code => process.exit(code));
 }
 
-// ★★★ РЕАЛИЗАЦИЯ ФУНКЦИИ УПАКОВКИ ★★★
 async function runPackage(appPath) {
   console.log(`${C_CYAN}[axle-cli] Packaging application...${C_RESET}`);
 
-  // Сначала запускаем валидацию, чтобы не упаковать сломанное приложение.
   if (!runValidation(appPath)) {
     console.error(`\n${C_RED}🚨 Aborting packaging due to validation errors.${C_RESET}`);
     process.exit(1);
   }
   
-  // Мы будем использовать конфигурацию из package.json приложения,
-  // что является стандартом для electron-builder.
   try {
+    // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+    // Шаг 1: Прочитать package.json приложения, которое мы собираем.
+    const appPackageJsonPath = path.join(appPath, 'package.json');
+    const appPackageJson = JSON.parse(fs.readFileSync(appPackageJsonPath, 'utf-8'));
+    const electronVersion = appPackageJson.devDependencies?.electron;
+
+    if (!electronVersion) {
+      throw new Error(`'electron' version not found in devDependencies of ${appPackageJsonPath}`);
+    }
+    
+    console.log(`${C_CYAN}[axle-cli] Using Electron version: ${electronVersion}${C_RESET}`);
+    
+    // Шаг 2: Передать эту версию напрямую в конфигурацию electron-builder.
     const result = await builder.build({
       projectDir: appPath,
-      // Мы можем указать цели сборки, например, только для текущей ОС
-      // targets: builder.Platform.current().createTarget(), 
       config: {
-        // Здесь можно переопределить или добавить любую конфигурацию для electron-builder
         "directories": {
           "output": path.join(appPath, "dist")
-        }
+        },
+        "electronVersion": electronVersion // Это решает проблему авто-детекции.
       }
     });
+    // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+
     console.log(`${C_GREEN}✅ Packaging complete! Files are located at:${C_RESET}`);
     result.forEach(p => console.log(`  - ${p}`));
 
   } catch (error) {
     console.error(`\n${C_RED}🚨 Packaging failed:${C_RESET}`);
-    console.error(error);
+    // Печатаем более детальную ошибку, если она есть
+    console.error(error.stack || error);
     process.exit(1);
   }
 }
-// ★★★ КОНЕЦ РЕАЛИЗАЦИИ ★★★
 
 function runValidation(appPath) {
   console.log(`\n${C_CYAN}[Validator] Running validation...${C_RESET}`);
