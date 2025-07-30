@@ -1,7 +1,4 @@
 // packages/example-app/manifest.js
-// ИЗМЕНЕНИЕ: Мы используем стандартный `require` для сборки частей.
-// Это стандартный и надежный подход в Node.js.
-
 const connectors = require('./manifest/connectors.js');
 const components = require('./manifest/components.js');
 const bridge = require('./manifest/bridge.js');
@@ -17,6 +14,18 @@ module.exports = {
       devtools: true
     }
   },
+
+  // ★★★ НОВАЯ СЕКЦИЯ: Декларативная Тема ★★★
+  themes: {
+    default: {
+      "--primary-bg": "#f0f2f5",
+      "--secondary-bg": "#FFFFFF",
+      "--text-color": "#1a1a1a",
+      "--header-height": "60px",
+      "--border-radius": "8px"
+    }
+  },
+  // ★★★ КОНЕЦ НОВОЙ СЕКЦИИ ★★★
 
   // --- Секция 2: Глобальные Переменные ---
   globals: {

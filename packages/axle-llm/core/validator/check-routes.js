@@ -81,11 +81,21 @@ function _validateActionRoute(route, category, componentNames, connectorNames, a
     addIssue('error', category, `Update component '${route.update}' is not defined.`, _getSuggestion(route.update, componentNames));
   }
   
+  // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ★★★
   // Проверка логического завершения экшена
-  const hasRedirect = JSON.stringify(route.steps || []).includes('"client:redirect"');
-  if (!route.update && !hasRedirect) {
-    addIssue('error', category, `Action must have a terminating operation.`, `Provide an 'update' property to re-render a component, or a 'client:redirect' step.`);
+  const stringifiedSteps = JSON.stringify(route.steps || []);
+  const hasRedirect = stringifiedSteps.includes('"client:redirect"');
+  const hasBridgeCall = stringifiedSteps.includes('"bridge:call"');
+
+  if (!route.update && !hasRedirect && !hasBridgeCall) {
+    addIssue(
+      'error', 
+      category, 
+      `Action must have a terminating operation.`, 
+      `Provide an 'update' property, a 'client:redirect' step, or a 'bridge:call' step.`
+    );
   }
+  // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
 
   // Рекурсивная проверка `steps`
   _checkSteps(route.steps || [], category, actionNames, appPath);

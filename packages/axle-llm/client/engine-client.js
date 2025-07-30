@@ -57,13 +57,12 @@
         if (!response.ok) throw new Error(`SPA navigation failed: ${response.status}`);
         const payload = await response.json();
         if (payload.redirect) {
-            _spaRedirect(payload.redirect); // Используем SPA-редирект для цепочек
+            _spaRedirect(payload.redirect); 
             return;
         }
         document.title = payload.title || document.title;
         _updateStylesForSpa(payload.styles);
 
-        // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
         for (const partName in payload.injectedParts) {
             const containerId = `${partName}-container`;
             const container = document.getElementById(containerId);
@@ -86,6 +85,23 @@
   }
   function _processServerPayload(payload, targetSelector, triggerElement) {
     if (payload.redirect) { _spaRedirect(payload.redirect); return; }
+    
+    // ★★★ НОВАЯ ФУНКЦИОНАЛЬНОСТЬ: ОБРАБОТКА ВЫЗОВОВ МОСТА ★★★
+    if (payload.bridgeCalls && Array.isArray(payload.bridgeCalls)) {
+        if (window.axle && window.axle.bridge) {
+            payload.bridgeCalls.forEach(call => {
+                console.log(`[axle-client] Executing bridge call:`, call);
+                // Мы не ждем ответа от моста. Пока это fire-and-forget.
+                window.axle.bridge.call(call.api, call.args)
+                    .then(result => console.log(`[axle-bridge] Call to '${call.api}' successful.`, result))
+                    .catch(err => console.error(`[axle-bridge] Call to '${call.api}' failed.`, err));
+            });
+        } else {
+            console.error('[axle-client] Received bridge calls but window.axle.bridge is not available!');
+        }
+    }
+    // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
+
     if (payload.html && targetSelector) {
       const targetElement = document.querySelector(targetSelector);
       if (!targetElement) { console.error(`[axle-client] Target element "${targetSelector}" not found.`); return; }
@@ -111,7 +127,7 @@
         const newActiveElement = document.getElementById(activeElementId);
         if (newActiveElement) {
           newActiveElement.focus();
-          if (typeof newActiveElement.setSelectionRange === 'function') {
+          if (typeof typeof newActiveElement.setSelectionRange === 'function') {
             newActiveElement.setSelectionRange(selectionStart, selectionEnd);
           }
         }

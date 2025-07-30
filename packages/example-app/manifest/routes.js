@@ -40,6 +40,24 @@ module.exports = {
       "formContent": "registerForm"
     }
   },
+  "GET /action/showInfo": {
+    "type": "action",
+    "reads": ["receipt"], // Читаем чек, чтобы использовать его данные в сообщении
+    "steps": [
+      {
+        "bridge:call": {
+          "api": "dialogs.showMessageBox",
+          "args": `{
+            type: 'info',
+            title: 'Информация о чеке',
+            message: 'Текущая итоговая сумма чека:',
+            detail: data.receipt.finalTotal + ' руб.'
+          }`
+        }
+      }
+    ]
+  },
+
 
   // ... (все action-роуты остаются без изменений) ...
   "POST /auth/login": { "type": "action", "reads": ["user"], "steps": [ { "set": "context.userToLogin", "to": "data.user.items.find(u => u.login === body.login)" }, { "set": "context.bcrypt", "to": "require('bcrypt')" }, { "if": "context.userToLogin && context.bcrypt.compareSync(body.password, context.userToLogin.passwordHash)", "then": [ { "auth:login": "context.userToLogin" }, { "client:redirect": "'/'" } ], "else": [ { "client:redirect": "'/login?error=1'" } ] } ] },
@@ -50,5 +68,33 @@ module.exports = {
   "POST /action/clearReceipt": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.items", "to": "[]" }, { "set": "data.receipt.discountPercent", "to": "0" }, { "set": "data.receipt.statusMessage", "to": "'Чек очищен.'" }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
   "POST /action/filterPositions": { "type": "action", "reads": ["positions", "viewState"], "writes": ["viewState"], "update": "positionsList", "steps": [{ "run": "filterPositions" }] },
   "POST /action/applyCoupon": { "type": "action", "reads": ["receipt"], "writes": ["receipt"], "update": "receipt", "steps": [ { "set": "data.receipt.statusMessage", "to": "'Неверный купон!'" }, { "set": "data.receipt.discountPercent", "to": "0" }, { "if": "body.coupon_code === 'SALE15'", "then": [ { "set": "data.receipt.discountPercent", "to": 15 }, { "set": "data.receipt.statusMessage", "to": "'Купон SALE15 применен!'" } ] }, { "action:run": { "name": "recalculateReceiptLogic" } } ] },
-  "POST /action/soft-refresh-receipt": { "type": "action", "reads": ["receipt"], "update": "receipt", "steps": [] }
+  "POST /action/soft-refresh-receipt": { "type": "action", "reads": ["receipt"], "update": "receipt", "steps": [] },
+    "GET /action/open-file": {
+    "type": "action",
+    "steps": [
+      {
+        "bridge:call": {
+          "api": "dialogs.showOpenDialog",
+          "args": `{
+            properties: ['openFile'],
+            filters: [
+              { name: 'Text Files', extensions: ['txt', 'md'] },
+              { name: 'All Files', extensions: ['*'] }
+            ]
+          }`
+        }
+      }
+    ]
+  },
+  "GET /action/open-docs": {
+    "type": "action",
+    "steps": [
+      {
+        "bridge:call": {
+          "api": "shell.openExternal",
+          "args": `{ "url": "https://github.com/Xzdes/axleLLM" }`
+        }
+      }
+    ]
+  }
 };

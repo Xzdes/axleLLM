@@ -33,7 +33,6 @@ async function setupEnvironment(appPath) {
 }
 
 module.exports = {
-    // ... (все тесты до "View rendering" остаются без изменений) ...
     'Renderer: Basic variable rendering': {
         options: { manifest: { components: { 'hello': 'hello.html' } }, files: { 'app/components/hello.html': '<h1>Hello, {{name}}!</h1>' } },
         async run(appPath) {
@@ -98,8 +97,6 @@ module.exports = {
             const finalHtml = await renderer.renderView(manifest.routes['GET /'], {}, null);
             log('Received final page HTML:', finalHtml);
             
-            // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
-            // Используем регулярное выражение, чтобы игнорировать атрибуты
             check(
                 /<header[^>]*>My App<\/header>/.test(finalHtml), 
                 'Header component should be injected into layout.'
@@ -108,6 +105,48 @@ module.exports = {
             check(
                 /<style data-component-name="header">/.test(finalHtml), 
                 'Style tag for header should be added to head.'
+            );
+        }
+    },
+    
+    // ★★★ НОВЫЙ ТЕСТ ★★★
+    'Renderer: Theming system should inject CSS variables into the root': {
+        options: {
+            manifest: {
+                launch: {},
+                components: { 'layout': 'layout.html' },
+                routes: { 'GET /': { type: 'view', layout: 'layout' } },
+                themes: {
+                    default: {
+                        "--main-color": "#336699",
+                        "--font-size": "16px"
+                    }
+                }
+            },
+            files: {
+                'app/components/layout.html': '<html><head></head><body>Page</body></html>',
+            }
+        },
+        async run(appPath) {
+            const { manifest, renderer } = await setupEnvironment(appPath);
+            const finalHtml = await renderer.renderView(manifest.routes['GET /'], {}, null);
+            log('Received final page HTML with theme:', finalHtml);
+
+            check(
+                finalHtml.includes('<style id="axle-theme-variables">'),
+                'A style tag for theme variables should be present.'
+            );
+            check(
+                finalHtml.includes(':root {'),
+                'The style tag should contain a :root selector.'
+            );
+            check(
+                finalHtml.includes('--main-color: #336699;'),
+                'The CSS variable for main color should be correctly injected.'
+            );
+             check(
+                finalHtml.includes('--font-size: 16px;'),
+                'The CSS variable for font size should be correctly injected.'
             );
         }
     }

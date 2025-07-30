@@ -94,25 +94,34 @@ class ActionEngine {
           try {
             if (step.try) await this.run(step.try);
           } catch (error) {
-            // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
-            // Ищем исходную, "чистую" ошибку. Если ее нет, используем саму ошибку.
             const originalError = error.cause || error;
-            
-            // Помещаем в контекст именно информацию об исходной ошибке.
             this.context.error = {
               message: originalError.message,
               stack: originalError.stack,
             };
-            
             if (step.catch) {
               await this.run(step.catch);
             }
-            
-            // Гарантированно очищаем временный объект ошибки из контекста.
             delete this.context.error;
           }
           break;
         }
+        
+        // ★★★ НОВАЯ ФУНКЦИОНАЛЬНОСТЬ: ШАГ ВЫЗОВА МОСТА ★★★
+        case 'bridge:call': {
+          const callDetails = step['bridge:call'];
+          const evaluatedArgs = evaluate(callDetails.args, this.context, this.appPath);
+
+          if (!this.context._internal.bridgeCalls) {
+            this.context._internal.bridgeCalls = [];
+          }
+          this.context._internal.bridgeCalls.push({
+            api: callDetails.api,
+            args: evaluatedArgs
+          });
+          break;
+        }
+        // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
 
         case 'auth:login':
           this.context._internal.loginUser = evaluate(step['auth:login'], this.context, this.appPath);
@@ -126,10 +135,6 @@ class ActionEngine {
           this.context._internal.redirect = evaluate(step['client:redirect'], this.context, this.appPath);
           this.context._internal.interrupt = true;
           break;
-        
-        case 'bridge:call':
-          console.warn(`[ActionEngine] 'bridge:call' is not yet implemented.`);
-          break;
 
         default:
           console.warn('[ActionEngine] Unknown or incomplete step:', step);
@@ -137,7 +142,6 @@ class ActionEngine {
       }
     } catch (error) {
       const errorMessage = `Step execution failed! Step: ${JSON.stringify(step)}. Error: ${error.message}`;
-      // Оборачиваем исходную ошибку, чтобы сохранить контекст о шаге, на котором она произошла.
       throw new Error(errorMessage, { cause: error });
     }
   }

@@ -36,6 +36,7 @@ class RequestHandler {
         this._sendResponse(res, 200, scriptContent, 'application/javascript');
         return;
       }
+      
       const routeConfig = this._findRoute(req.method, url.pathname);
       if (!routeConfig) { return this._sendResponse(res, 404, 'Not Found'); }
       const user = this.authEngine ? await this.authEngine.getUserFromRequest(req) : null;
@@ -55,11 +56,8 @@ class RequestHandler {
         if (isSpaRequest) {
           const spaPayload = { title: this.manifest.launch.title, styles: [], injectedParts: {} };
           
-          // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ★★★
-          // Мы итерируем по ВСЕМ плейсхолдерам, которые нужно заполнить для этого роута
           for (const placeholder in routeConfig.inject) {
               const componentToInject = routeConfig.inject[placeholder];
-              // Рендерим каждую часть с ПОЛНЫМ и ПРАВИЛЬНЫМ контекстом
               const { html, styles } = await this.renderer._renderComponentRecursive(componentToInject, renderContext, routeConfig.inject);
               spaPayload.injectedParts[placeholder] = html;
               spaPayload.styles.push(...styles);
@@ -119,6 +117,11 @@ class RequestHandler {
       const renderContext = { data: finalContext.data, user: finalContext.user };
       responsePayload = await this.renderer.renderComponent(routeConfig.update, renderContext, currentUrl);
     }
+    
+    if (internalActions.bridgeCalls) {
+        responsePayload.bridgeCalls = internalActions.bridgeCalls;
+    }
+
     return { responsePayload, sessionCookie, data: finalContext.data };
   }
 

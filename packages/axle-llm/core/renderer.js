@@ -1,10 +1,8 @@
 // packages/axle-llm/core/renderer.js
 const Mustache = require('./mustache');
 const posthtml = require('posthtml');
-// const csstree = require('css-tree'); // УДАЛИЛИ
 
 class Renderer {
-  // ... все методы до _scopeCss остаются без изменений ...
   constructor(assetLoader, manifest, connectorManager) {
     this.assetLoader = assetLoader;
     this.manifest = manifest;
@@ -15,14 +13,34 @@ class Renderer {
     const layoutName = routeConfig.layout;
     if (!layoutName) throw new Error(`[Renderer] No layout specified for route.`);
     const finalRenderContext = { ...dataContext, globals: this.manifest.globals || {}, url: this._getUrlContext(reqUrl) };
+    
     const { html, styles } = await this._renderComponentRecursive(layoutName, finalRenderContext, routeConfig.inject || {});
+    
     let finalHtml = html;
-    if (styles.length > 0) {
-      const styleTags = styles.map(s => `<style data-component-name="${s.name}">${s.css}</style>`).join('\n');
-      finalHtml = finalHtml.replace('</head>', `${styleTags}\n</head>`);
+    
+    // ★★★ НОВАЯ ФУНКЦИОНАЛЬНОСТЬ: ВНЕДРЕНИЕ ТЕМЫ ★★★
+    let themeStyleTag = '';
+    if (this.manifest.themes && this.manifest.themes.default) {
+      const variables = this.manifest.themes.default;
+      const cssVariables = Object.entries(variables)
+        .map(([key, value]) => `  ${key}: ${value};`)
+        .join('\n');
+      
+      if (cssVariables) {
+        themeStyleTag = `<style id="axle-theme-variables">\n:root {\n${cssVariables}\n}\n</style>`;
+      }
     }
+    // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
+
+    if (styles.length > 0 || themeStyleTag) {
+      const componentStyleTags = styles.map(s => `<style data-component-name="${s.name}">${s.css}</style>`).join('\n');
+      const allStyleTags = [themeStyleTag, componentStyleTags].filter(Boolean).join('\n');
+      finalHtml = finalHtml.replace('</head>', `${allStyleTags}\n</head>`);
+    }
+
     const clientScriptTag = `<script src="/engine-client.js"></script>`;
     finalHtml = finalHtml.replace('</body>', `${clientScriptTag}\n</body>`);
+
     return finalHtml;
   }
 
@@ -68,13 +86,10 @@ class Renderer {
     return { pathname: reqUrl.pathname, query: Object.fromEntries(reqUrl.searchParams) };
   }
   
-  // ★★★ ФИНАЛЬНАЯ ВЕРСИЯ (v10 - Самая простая и надежная) ★★★
   _scopeCss(css, scopeId) {
     const scopeAttr = `[data-component-id="${scopeId}"]`;
-    // Сначала удаляем все комментарии
     const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
     
-    // Затем обрабатываем каждое правило
     return cssWithoutComments.split('}').filter(rule => rule.trim()).map(rule => {
         const [selectors, body] = rule.split('{');
         const scopedSelectors = selectors.split(',')

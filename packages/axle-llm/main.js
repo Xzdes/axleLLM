@@ -1,6 +1,6 @@
 // packages/axle-llm/main.js
 
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron'); // Добавили shell
 const path = require('path');
 const { createServerInstance } = require('./core/server');
 const { loadManifest } = require('./core/config-loader');
@@ -13,6 +13,50 @@ if (!appPath) {
   process.exit(1);
 }
 const manifest = loadManifest(appPath);
+
+function setupBridge(win) {
+  ipcMain.handle('axle:bridge-call', async (event, api, args) => {
+    console.log(`[axle-bridge] Received call for API: ${api} with args:`, args);
+    
+    if (win.isDestroyed()) return;
+
+    const [apiGroup, apiMethod] = api.split('.');
+    if (!apiGroup || !apiMethod) {
+      throw new Error(`[axle-bridge] Invalid API format: ${api}`);
+    }
+
+    const isAllowed = manifest.bridge?.[apiGroup]?.[apiMethod] === true;
+    if (!isAllowed) {
+      throw new Error(`[axle-bridge] API call blocked by manifest: '${api}' is not whitelisted.`);
+    }
+
+    // ★★★ РАСШИРЕНИЕ ФУНКЦИОНАЛЬНОСТИ ★★★
+    switch (apiGroup) {
+      case 'dialogs':
+        switch (apiMethod) {
+          case 'showMessageBox':
+            return await dialog.showMessageBox(win, args);
+          case 'showOpenDialog':
+            return await dialog.showOpenDialog(win, args);
+          default:
+            throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group '${apiGroup}'.`);
+        }
+      case 'shell':
+        switch (apiMethod) {
+          case 'openExternal':
+            // openExternal не возвращает промис и выполняется асинхронно
+            await shell.openExternal(args.url);
+            return { success: true }; // Возвращаем подтверждение
+          default:
+            throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group '${apiGroup}'.`);
+        }
+      // ★★★ КОНЕЦ РАСШИРЕНИЯ ★★★
+      default:
+        throw new Error(`[axle-bridge] Unknown API group: '${apiGroup}'.`);
+    }
+  });
+}
+
 
 if (isDev) {
   try {
@@ -35,29 +79,28 @@ async function createWindow() {
   const windowConfig = launchConfig.window || {};
   const defaultConfig = { width: 1024, height: 768, devtools: false };
   const config = { ...defaultConfig, ...windowConfig };
+  
   const win = new BrowserWindow({
     width: config.width,
     height: config.height,
     title: launchConfig.title || 'axleLLM Application',
     webPreferences: {
+      preload: path.join(__dirname, 'core', 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
+  setupBridge(win);
+
   try {
-    // 1. Создаем экземпляр сервера, но не запускаем.
     const { httpServer } = await createServerInstance(appPath, manifest);
-    
-    // 2. Находим свободный порт.
     const port = await getPort();
     const host = '127.0.0.1';
     
-    // 3. Запускаем прослушивание сервера на этом порту.
     httpServer.listen(port, host, () => {
         const serverUrl = `http://${host}:${port}`;
         console.log(`[axle-main] Internal server is listening on ${serverUrl}`);
-        // 4. Только после успешного запуска загружаем URL в окно.
         win.loadURL(serverUrl);
     });
     httpServer.on('error', (err) => { 

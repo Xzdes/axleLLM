@@ -5,13 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ globals.appName }}</title>
+    <!-- 
+      Тег <style> с переменными :root теперь генерируется движком 
+      автоматически из manifest.js, поэтому здесь его нет.
+    -->
     <style>
-        :root {
-            --primary-bg: #f0f2f5;
-            --secondary-bg: #FFFFFF;
-            --text-color: #1a1a1a;
-            --header-height: 60px;
-        }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--primary-bg);
@@ -43,7 +41,6 @@
 </head>
 <body>
 
-    <!-- ★ ИЗМЕНЕНИЕ: Контейнер для шапки с плейсхолдером -->
     <div id="header-container">
         <atom-inject into="header"></atom-inject>
     </div>
@@ -52,6 +49,7 @@
         <atom-inject into="pageContent"></atom-inject>
     </main>
 
-<script src="/engine-client.js"></script>
+<!-- ★★★ ИЗМЕНЕНИЕ: Тег скрипта удален отсюда. ★★★ -->
+<!-- Движок теперь автоматически вставляет его, что более надежно. -->
 </body>
 </html>

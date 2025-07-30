@@ -1,10 +1,12 @@
 <!-- packages/example-app/app/components/header.html -->
 <header class="app-header">
     <h1>{{ globals.appName }}</h1>
-    {{#user}}
     <div class="user-info">
-        <span>{{ user.name }} ({{ user.role }})</span>
-        <a atom-action="GET /auth/logout">Выход</a>
+        <!-- ★★★ НОВАЯ КНОПКА ★★★ -->
+        <a atom-action="GET /action/open-docs">Документация</a>
+        {{#user}}
+            <span>{{ user.name }} ({{ user.role }})</span>
+            <a atom-action="GET /auth/logout">Выход</a>
+        {{/user}}
     </div>
-    {{/user}}
 </header>

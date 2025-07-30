@@ -51,7 +51,7 @@
       <input type="text" name="coupon_code" placeholder="Промокод">
       <button type="submit" class="action-button">Применить</button>
     </form>
-    
+
     <button 
       id="clear-btn"
       type="button"
@@ -60,5 +60,24 @@
       atom-target="#receipt-container"
     >
       Очистить чек
+    </button>
+    
+    <button 
+      type="button"
+      class="action-button"
+      style="margin-top: 10px; background-color: #e6f7ff;"
+      atom-action="GET /action/showInfo"
+    >
+      Показать инфо (Тест Моста)
+    </button>
+
+    <!-- ★★★ НОВАЯ КНОПКА ★★★ -->
+    <button 
+      type="button"
+      class="action-button"
+      style="margin-top: 10px;"
+      atom-action="GET /action/open-file"
+    >
+      Прикрепить файл...
     </button>
 </div>
