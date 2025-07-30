@@ -81,8 +81,6 @@ function _validateActionRoute(route, category, componentNames, connectorNames, a
     addIssue('error', category, `Update component '${route.update}' is not defined.`, _getSuggestion(route.update, componentNames));
   }
   
-  // ★★★ ЕДИНСТВЕННО ВЕРНАЯ ЛОГИКА ПРОВЕРКИ ★★★
-  // Проверка логического завершения экшена
   const stringifiedSteps = JSON.stringify(route.steps || []);
   const hasRedirect = stringifiedSteps.includes('"client:redirect"');
   const hasBridgeCall = stringifiedSteps.includes('"bridge:call"');
@@ -92,11 +90,9 @@ function _validateActionRoute(route, category, componentNames, connectorNames, a
       'error', 
       category, 
       `Action must have a terminating operation.`, 
-      // Эта строка с подсказкой - ключевой индикатор, что работает верная логика
       `Provide an 'update' property, a 'client:redirect' step, or a 'bridge:call' step.`
     );
   }
-  // ★★★ КОНЕЦ ★★★
 
   // Рекурсивная проверка `steps`
   _checkSteps(route.steps || [], category, actionNames, appPath);
@@ -111,10 +107,27 @@ function _checkSteps(steps, category, actionNames, appPath) {
     if (step.then) _checkSteps(step.then, category, actionNames, appPath);
     if (step.else) _checkSteps(step.else, category, actionNames, appPath);
     
+    // Проверка для старого шага "run"
     if (step.run) {
       const runPath = path.join(appPath, 'app', 'actions', `${step.run}.js`);
       checkFileExists(runPath, category, `run script '${step.run}.js'`);
     }
+
+    // ★★★ НАЧАЛО НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
+    // Проверка для нового шага "run:set"
+    if (step['run:set']) {
+      const handlerName = step.handler;
+      if (!handlerName) {
+        addIssue('error', category, `Step 'run:set' is missing the required 'handler' property.`);
+      } else {
+        const handlerPath = path.join(appPath, 'app', 'actions', `${handlerName}.js`);
+        checkFileExists(handlerPath, category, `handler script for 'run:set' ('${handlerName}.js')`);
+      }
+      if (!step.with) {
+        addIssue('warning', category, `Step 'run:set' is missing the 'with' property.`, `The handler '${handlerName}' will be called with 'undefined' as an argument.`);
+      }
+    }
+    // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
     
     if (step['action:run'] && step['action:run'].name) {
       const actionName = step['action:run'].name;
@@ -131,7 +144,7 @@ function _checkSteps(steps, category, actionNames, appPath) {
  */
 function _getSuggestion(typo, validOptions) {
   let bestMatch = null;
-  let minDistance = 3; // Не ищем совпадения, если разница слишком велика.
+  let minDistance = 3; 
 
   for (const option of validOptions) {
     const distance = _levenshtein(typo, option);

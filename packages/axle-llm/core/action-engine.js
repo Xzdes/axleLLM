@@ -74,6 +74,34 @@ class ActionEngine {
           }
           break;
         }
+
+        // ★★★ НАЧАЛО НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
+        case 'run:set': {
+          const destinationPath = step['run:set'];
+          const handlerName = step.handler;
+          const argsExpression = step.with;
+
+          if (!handlerName) {
+            throw new Error(`Step 'run:set' is missing the 'handler' property.`);
+          }
+
+          const handler = this.assetLoader.getAction(handlerName);
+          if (!handler) {
+            throw new Error(`Handler '${handlerName}' not found for 'run:set' step.`);
+          }
+
+          // Вычисляем аргументы и передаем их в хендлер
+          const evaluatedArgs = evaluate(argsExpression, this.context, this.appPath);
+          
+          // Обеспечиваем, что аргументы всегда передаются как массив для удобства использования spread (...)
+          const argsArray = Array.isArray(evaluatedArgs) ? evaluatedArgs : [evaluatedArgs];
+          const result = await handler(...argsArray);
+
+          // Устанавливаем возвращенное значение в указанное место
+          this._setValue(destinationPath, result);
+          break;
+        }
+        // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
         
         case 'action:run': {
           const subActionName = step['action:run'].name;
@@ -107,7 +135,6 @@ class ActionEngine {
           break;
         }
         
-        // ★★★ НОВАЯ ФУНКЦИОНАЛЬНОСТЬ: ШАГ ВЫЗОВА МОСТА ★★★
         case 'bridge:call': {
           const callDetails = step['bridge:call'];
           const evaluatedArgs = evaluate(callDetails.args, this.context, this.appPath);
@@ -121,7 +148,6 @@ class ActionEngine {
           });
           break;
         }
-        // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
 
         case 'auth:login':
           this.context._internal.loginUser = evaluate(step['auth:login'], this.context, this.appPath);

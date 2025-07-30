@@ -31,7 +31,7 @@ function check(condition, description, actual) {
 
 module.exports = {
     'ActionEngine: Step "set" should correctly modify context': {
-        options: {}, // Файлы не нужны, тест работает в памяти
+        options: {},
         async run(appPath) {
             const initialContext = { data: { cart: { items: [], total: 0 } } };
             const engine = new ActionEngine(initialContext, appPath, null, null);
@@ -94,6 +94,48 @@ module.exports = {
         }
     },
 
+    // ★★★ НАЧАЛО НОВОГО ТЕСТА ★★★
+    'ActionEngine: Step "run:set" should execute a handler and set its return value': {
+        options: {
+            manifest: {},
+            files: {
+                'app/actions/formatName.js': `module.exports = (firstName, lastName) => { return \`\${lastName}, \${firstName}\`; };`,
+                'app/actions/double.js': `module.exports = (num) => { return num * 2; };`
+            }
+        },
+        async run(appPath) {
+            const manifest = require(path.join(appPath, 'manifest.js'));
+            const assetLoader = new AssetLoader(appPath, manifest);
+            const initialContext = {
+                data: { user: { first: 'John', last: 'Doe' }, count: 10 },
+                _internal: {},
+            };
+            const engine = new ActionEngine(initialContext, appPath, assetLoader, null);
+
+            const steps = [
+                // Тест 1: Передача нескольких аргументов из массива
+                {
+                    "run:set": "data.user.formattedName",
+                    "handler": "formatName",
+                    "with": "[data.user.first, data.user.last]"
+                },
+                // Тест 2: Передача одного аргумента
+                {
+                    "run:set": "data.doubledCount",
+                    "handler": "double",
+                    "with": "data.count"
+                }
+            ];
+            await engine.run(steps);
+            const finalContext = engine.context;
+            log('Final context for run:set test:', finalContext);
+
+            check(finalContext.data.user.formattedName === 'Doe, John', 'Should correctly format name using multiple arguments.');
+            check(finalContext.data.doubledCount === 20, 'Should correctly double the number using a single argument.');
+        }
+    },
+    // ★★★ КОНЕЦ НОВОГО ТЕСТА ★★★
+
     'ActionEngine: Step "action:run" should call another action': {
         options: {
             manifest: {
@@ -102,9 +144,7 @@ module.exports = {
                         "type": "action", "internal": true,
                         "steps": [{ "set": "data.cart.total", "to": "data.cart.items.reduce((sum, item) => sum + item.price, 0)" }]
                     },
-                    "POST /addItem": {
-                        "type": "action",
-                        "steps": [
+                    "POST /addItem": { "type": "action", "steps": [
                             { "set": "data.cart.items", "to": "data.cart.items.concat([{ price: body.price }])" },
                             { "action:run": { "name": "calculateTotal" } }
                         ]
@@ -114,7 +154,8 @@ module.exports = {
         },
         async run(appPath) {
             const manifest = require(path.join(appPath, 'manifest.js'));
-            const connectorManager = new ConnectorManager(appPath, manifest);
+            const dbPath = path.join(appPath, 'test-db-data');
+            const connectorManager = new ConnectorManager(appPath, manifest, { dbPath });
             await connectorManager.init();
             const assetLoader = new AssetLoader(appPath, manifest);
             const renderer = new Renderer(assetLoader, manifest, connectorManager);
@@ -140,7 +181,7 @@ module.exports = {
     'ActionEngine: Step "try/catch" should handle runtime errors declaratively': {
         options: {
             manifest: {},
-            files: {} // Никакие файлы не нужны
+            files: {}
         },
         async run(appPath) {
             const initialContext = { data: { result: 'pending', errorMessage: '' } };
@@ -149,9 +190,7 @@ module.exports = {
             const steps = [
                 {
                     "try": [
-                        // Этот шаг разработан, чтобы вызвать ошибку
                         { "set": "data.invalid", "to": "JSON.parse('{not_json}')" },
-                        // Этот шаг никогда не должен выполниться
                         { "set": "data.result", "to": "'try_succeeded'" }
                     ],
                     "catch": [
@@ -167,7 +206,6 @@ module.exports = {
 
             check(finalContext.data.result === 'caught_error', 'The "catch" block should have been executed.');
             
-            // ★★★ УЛУЧШЕННЫЕ ПРОВЕРКИ ★★★
             check(
                 finalContext.data.errorMessage.includes('in JSON'), 
                 'The original error message should be captured in the context.', 
