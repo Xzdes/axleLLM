@@ -12,14 +12,12 @@ const { addIssue, checkFileExists } = require('./utils');
  */
 function validateRoutes(manifest, appPath) {
   const routes = manifest.routes || {};
-  const componentNames = Object.keys(manifest.components || {});
+  const components = manifest.components || {}; // ★★★ ПОЛУЧАЕМ ПОЛНУЮ КОНФИГУРАЦИЮ КОМПОНЕНТОВ ★★★
+  const componentNames = Object.keys(components);
   const connectorNames = Object.keys(manifest.connectors || {});
   const actionNames = Object.keys(routes).filter(key => routes[key].type === 'action');
 
-  // ★★★ НАЧАЛО НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
-  // Валидируем секцию custom bridge перед проверкой роутов
   _validateCustomBridge(manifest.bridge, appPath);
-  // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
 
   for (const key in routes) {
     const route = routes[key];
@@ -31,18 +29,14 @@ function validateRoutes(manifest, appPath) {
     }
 
     if (route.type === 'view') {
-      _validateViewRoute(route, category, componentNames, connectorNames);
+      // ★★★ ПЕРЕДАЕМ ПОЛНУЮ КОНФИГУРАЦИЮ КОМПОНЕНТОВ ★★★
+      _validateViewRoute(route, category, components, componentNames, connectorNames);
     } else { // route.type === 'action'
       _validateActionRoute(route, category, componentNames, connectorNames, actionNames, appPath);
     }
   }
 }
 
-// ★★★ НАЧАЛО НОВОЙ ФУНКЦИИ ★★★
-/**
- * Проверяет секцию `bridge.custom` в манифесте.
- * @private
- */
 function _validateCustomBridge(bridgeConfig, appPath) {
   const customModules = bridgeConfig?.custom || {};
   for (const moduleName in customModules) {
@@ -56,36 +50,77 @@ function _validateCustomBridge(bridgeConfig, appPath) {
     checkFileExists(modulePath, category, `module file '${fileName}'`);
   }
 }
-// ★★★ КОНЕЦ НОВОЙ ФУНКЦИИ ★★★
-
 
 /**
  * Вспомогательная функция для валидации `view`-роута.
  * @private
  */
-function _validateViewRoute(route, category, componentNames, connectorNames) {
+function _validateViewRoute(route, category, components, componentNames, connectorNames) {
   if (!route.layout) {
     addIssue('error', category, `View route is missing the required 'layout' property.`);
   } else if (!componentNames.includes(route.layout)) {
     addIssue('error', category, `Layout component '${route.layout}' is not defined.`, _getSuggestion(route.layout, componentNames));
   }
+
   (route.reads || []).forEach(name => {
     if (!connectorNames.includes(name)) {
       addIssue('error', category, `Read connector '${name}' is not defined.`, _getSuggestion(name, connectorNames));
     }
   });
+
   for (const placeholder in (route.inject || {})) {
     const componentName = route.inject[placeholder];
     if (!componentNames.includes(componentName)) {
       addIssue('error', category, `Injected component '${componentName}' is not defined.`, _getSuggestion(componentName, componentNames));
     }
   }
+
+  // ★★★ НАЧАЛО НОВОЙ ЛОГИКИ ПРОВЕРКИ СХЕМ ★★★
+  const availableConnectors = new Set(route.reads || []);
+  const allInjectedComponents = Object.values(route.inject || {});
+  if (route.layout) {
+    allInjectedComponents.push(route.layout);
+  }
+
+  // Рекурсивно проверяем все компоненты, используемые в роуте
+  allInjectedComponents.forEach(componentName => {
+    _checkComponentSchemaRecursive(componentName, components, availableConnectors, category);
+  });
+  // ★★★ КОНЕЦ НОВОЙ ЛОГИКИ ПРОВЕРКИ СХЕМ ★★★
 }
 
+// ★★★ НАЧАЛО НОВОЙ РЕКУРСИВНОЙ ФУНКЦИИ ★★★
 /**
- * Вспомогательная функция для валидации `action`-роута.
+ * Рекурсивно проверяет схему компонента и всех его дочерних компонентов.
  * @private
  */
+function _checkComponentSchemaRecursive(componentName, allComponents, availableConnectors, routeCategory) {
+  const componentConfig = allComponents[componentName];
+  if (!componentConfig || !componentConfig.schema) {
+    return; // Если у компонента нет схемы, проверять нечего
+  }
+
+  const requiredConnectors = componentConfig.schema.requires || [];
+  requiredConnectors.forEach(requiredConnector => {
+    if (!availableConnectors.has(requiredConnector)) {
+      addIssue(
+        'error',
+        routeCategory,
+        `Component '${componentName}' requires connector '${requiredConnector}', but it is not listed in the route's 'reads' section.`,
+        `Add '${requiredConnector}' to the 'reads' array for this route.`
+      );
+    }
+  });
+
+  // Проверяем дочерние компоненты, если они есть (пока не реализовано, задел на будущее)
+  // const childInjects = componentConfig.inject || {};
+  // Object.values(childInjects).forEach(childName => {
+  //   _checkComponentSchemaRecursive(childName, allComponents, availableConnectors, routeCategory);
+  // });
+}
+// ★★★ КОНЕЦ НОВОЙ РЕКУРСИВНОЙ ФУНКЦИИ ★★★
+
+
 function _validateActionRoute(route, category, componentNames, connectorNames, actionNames, appPath) {
   if (route.internal === true) return;
   
@@ -115,10 +150,6 @@ function _validateActionRoute(route, category, componentNames, connectorNames, a
   _checkSteps(route.steps || [], category, actionNames, appPath);
 }
 
-/**
- * Рекурсивно проверяет массив `steps`.
- * @private
- */
 function _checkSteps(steps, category, actionNames, appPath) {
   steps.forEach(step => {
     if (step.then) _checkSteps(step.then, category, actionNames, appPath);
@@ -151,10 +182,6 @@ function _checkSteps(steps, category, actionNames, appPath) {
   });
 }
 
-/**
- * Находит наиболее вероятное правильное имя, если пользователь опечатался.
- * @private
- */
 function _getSuggestion(typo, validOptions) {
   let bestMatch = null;
   let minDistance = 3; 
@@ -169,10 +196,6 @@ function _getSuggestion(typo, validOptions) {
   return bestMatch ? `Did you mean '${bestMatch}'?` : '';
 }
 
-/**
- * Реализация алгоритма "Расстояние Левенштейна" для поиска опечаток.
- * @private
- */
 function _levenshtein(a, b) {
   const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
   for (let i = 0; i <= a.length; i += 1) matrix[0][i] = i;
