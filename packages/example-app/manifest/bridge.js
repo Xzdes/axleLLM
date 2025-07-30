@@ -2,13 +2,16 @@
 module.exports = {
   "dialogs": {
     "showMessageBox": true,
-    // ★★★ РАЗРЕШАЕМ НОВЫЙ ВЫЗОВ ★★★
-    "showOpenDialog": true
+    "showOpenDialog": true,
+    // ★★★ РАЗРЕШАЕМ НОВЫЙ ВЫЗОВ (КЛИЕНТСКИЙ МОСТ) ★★★
+    "showSaveDialog": true
   },
   "printer": {},
   "shell": {
-    // ★★★ РАЗРЕШАЕМ НОВЫЙ ВЫЗОВ ★★★
     "openExternal": true
   },
-  "custom": {}
+  // ★★★ РЕГИСТРИРУЕМ НАШ НОВЫЙ МОДУЛЬ (СЕРВЕРНЫЙ МОСТ) ★★★
+  "custom": {
+    "fileUtils": "file-utils.js"
+  }
 };

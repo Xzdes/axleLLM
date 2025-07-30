@@ -4,17 +4,9 @@ module.exports = {
     "type": "action",
     "internal": true,
     "steps": [
-      // 1. Посчитать количество товаров
       { "set": "data.receipt.itemCount", "to": "data.receipt.items.reduce((sum, item) => sum + (item.quantity || 0), 0)" },
-      
-      // 2. Вызвать хендлер для подсчета "грязной" суммы
-      // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Мы передаем массив [items], чтобы хендлер получил один аргумент ★★★
       { "run:set": "data.receipt.total", "handler": "calculateTotal", "with": "[data.receipt.items]" },
-      
-      // 3. Вызвать хендлер для подсчета финальной суммы и скидки
       { "run:set": "context.finalCalc", "handler": "calculateFinalTotal", "with": "[data.receipt.total, data.receipt.discountPercent]" },
-      
-      // 4. Разложить результат по нужным полям
       { "set": "data.receipt.discount", "to": "context.finalCalc.discount" },
       { "set": "data.receipt.finalTotal", "to": "context.finalCalc.finalTotal" }
     ]
@@ -99,6 +91,34 @@ module.exports = {
         "bridge:call": {
           "api": "shell.openExternal",
           "args": `{ "url": "https://github.com/Xzdes/axleLLM" }`
+        }
+      }
+    ]
+  },
+  "POST /action/saveReceipt": {
+    "type": "action",
+    "reads": ["receipt"],
+    "steps": [
+      {
+        "run:set": "context.receiptText",
+        "handler": "formatReceiptForSave",
+        "with": "[data.receipt]"
+      },
+      {
+        "bridge:call": {
+          "api": "custom.fileUtils.saveTextFile",
+          "args": "['receipt.txt', context.receiptText]",
+          "resultTo": "context.saveResult"
+        }
+      },
+      {
+        "bridge:call": {
+          "api": "dialogs.showMessageBox",
+          "args": `{
+            type: context.saveResult.success ? 'info' : 'error',
+            title: 'Сохранение чека',
+            message: context.saveResult.message
+          }`
         }
       }
     ]
