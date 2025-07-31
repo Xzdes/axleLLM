@@ -41,7 +41,9 @@ class RequestHandler {
 
       const routeConfig = this._findRoute(req.method, url.pathname);
       if (!routeConfig) { return this._sendResponse(res, 404, 'Not Found'); }
+      
       const user = this.authEngine ? await this.authEngine.getUserFromRequest(req) : null;
+      
       if (routeConfig.auth?.required && !user) {
         const redirectUrl = routeConfig.auth.failureRedirect || '/login';
         if (routeConfig.type === 'action' || isSpaRequest) {
@@ -91,7 +93,17 @@ class RequestHandler {
     const executionContext = { ...context, data: dataContext };
     
     const engine = new ActionEngine(executionContext, this.appPath, this.assetLoader, this);
-    await engine.run(routeConfig.steps || []);
+    
+    try {
+        await engine.run(routeConfig.steps || []);
+    } catch (engineError) {
+        console.error(`[RequestHandler] ActionEngine failed for route '${context.routeName}'.`, engineError);
+        // Если есть `res`, отправляем ошибку клиенту. Иначе просто логируем.
+        if (res && !res.headersSent) {
+            this._sendResponse(res, 500, { error: 'Action execution failed', details: engineError.message });
+        }
+        return; // Прерываем выполнение
+    }
     
     if (routeConfig.internal) {
       return { data: engine.context.data };
@@ -107,16 +119,26 @@ class RequestHandler {
           engine._setValue(internal.awaitingBridgeCall.resultTo, bridgeResult);
         }
         
-        delete internal.awaitingBridgeCall;
-        delete internal.interrupt;
+        // Находим индекс шага с bridge:call. Это упрощенная реализация.
+        const lastStepIndex = (routeConfig.steps || []).findIndex(s => s['bridge:call'] && s['bridge:call'].await);
+        const remainingSteps = (routeConfig.steps || []).slice(lastStepIndex + 1);
 
-        // Future: Implement logic to run remaining steps.
-        // For now, awaitable calls are assumed to be final.
-
+        delete engine.context._internal.interrupt;
+        delete engine.context._internal.awaitingBridgeCall;
+        
+        // Запускаем оставшиеся шаги
+        await engine.run(remainingSteps);
+        
+        // Завершаем action, отправляя ответ через сокет, т.к. исходный HTTP-запрос уже завершен.
         await this._finalizeAction(engine, routeConfig, req, null);
       };
       
-      const httpResponsePayload = await this.socketEngine.registerContinuation(context.socketId, internal.awaitingBridgeCall.details, continuation);
+      // Регистрируем продолжение и немедленно отправляем ответ на HTTP-запрос
+      const httpResponsePayload = await this.socketEngine.registerContinuation(
+          context.socketId, 
+          internal.awaitingBridgeCall.details, 
+          continuation
+      );
       this._sendResponse(res, 200, httpResponsePayload, 'application/json');
 
     } else {
@@ -129,11 +151,13 @@ class RequestHandler {
     const internalActions = finalContext._internal || {};
     let sessionCookie = null;
 
-    if (internalActions.loginUser && this.authEngine) {
-      sessionCookie = await this.authEngine.createSessionCookie(internalActions.loginUser);
-    }
-    if (internalActions.logout && this.authEngine) {
-      sessionCookie = await this.authEngine.clearSessionCookie(req);
+    if (this.authEngine) {
+        if (internalActions.loginUser) {
+          sessionCookie = await this.authEngine.createSessionCookie(internalActions.loginUser);
+        }
+        if (internalActions.logout) {
+          sessionCookie = await this.authEngine.clearSessionCookie(req);
+        }
     }
     
     if (routeConfig.internal) return finalContext;
@@ -152,26 +176,32 @@ class RequestHandler {
       responsePayload.redirect = internalActions.redirect;
     } else if (routeConfig.update) {
       const currentUrl = req ? new URL(req.url, `http://${req.headers.host}`) : null;
-      const renderContext = { data: finalContext.data, user: finalContext.user };
+      // В renderComponent передаем полный контекст, включая user, globals и т.д.
+      const renderContext = { data: finalContext.data, user: finalContext.user, globals: this.manifest.globals };
       responsePayload = await this.renderer.renderComponent(routeConfig.update, renderContext, currentUrl);
-      responsePayload.targetSelector = `#${routeConfig.update}-container`;
+      // Предполагаем, что контейнер имеет ID по имени компонента
+      const componentConfig = this.manifest.components[routeConfig.update];
+      const componentRootId = componentConfig.rootId || routeConfig.update; // (Задел на будущее)
+      responsePayload.targetSelector = `#${componentRootId}-container`;
     }
     
     if (internalActions.bridgeCalls) {
       responsePayload.bridgeCalls = internalActions.bridgeCalls;
     }
 
-    if (res) {
+    // `res` будет null, если это продолжение интерактивного вызова
+    if (res && !res.headersSent) {
       if (sessionCookie) {
         res.setHeader('Set-Cookie', sessionCookie);
       }
       this._sendResponse(res, 200, responsePayload, 'application/json');
     } 
-    else if (routeConfig.update) {
-      this.socketEngine.sendToClient(finalContext.socketId, {
-        type: 'html_update',
-        payload: responsePayload
-      });
+    else if (routeConfig.update && finalContext.socketId) {
+        // Если `res` нет, но есть обновление, отправляем его через сокет
+        this.socketEngine.sendToClient(finalContext.socketId, {
+            type: 'html_update',
+            payload: responsePayload
+        });
     }
     
     return { data: finalContext.data };
@@ -181,9 +211,10 @@ class RequestHandler {
     const routes = this.manifest.routes || {};
     const key = `${method} ${pathname}`;
     if (routes[key]) {
-      routes[key].key = key;
+      routes[key].key = key; // Добавляем ключ для самоидентификации
       return routes[key];
     }
+    // Здесь можно добавить поддержку динамических роутов в будущем
     return null;
   }
 
@@ -200,7 +231,6 @@ class RequestHandler {
           resolve({});
         } catch (e) { reject(e); }
       });
-      // ★★★ ИСПРАВЛЕНИЕ: Добавлена недостающая скобка ★★★
       req.on('error', err => reject(err));
     });
   }
@@ -211,4 +241,5 @@ class RequestHandler {
     res.writeHead(statusCode, { 'Content-Type': contentType, 'Content-Length': Buffer.byteLength(body) }).end(body);
   }
 }
+
 module.exports = { RequestHandler };
