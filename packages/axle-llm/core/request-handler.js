@@ -97,12 +97,14 @@ class RequestHandler {
     try {
         await engine.run(routeConfig.steps || []);
     } catch (engineError) {
-        console.error(`[RequestHandler] ActionEngine failed for route '${context.routeName}'.`, engineError);
-        // Если есть `res`, отправляем ошибку клиенту. Иначе просто логируем.
+        console.error(`[RequestHandler] ActionEngine failed for route '${context.routeName}'.`, engineError.message);
+        
         if (res && !res.headersSent) {
-            this._sendResponse(res, 500, { error: 'Action execution failed', details: engineError.message });
+            // Создаем простой объект для ответа и передаем только сообщение об ошибке.
+            const errorPayload = { error: 'Action execution failed', details: engineError.message };
+            this._sendResponse(res, 500, errorPayload, 'application/json');
         }
-        return; // Прерываем выполнение
+        return;
     }
     
     if (routeConfig.internal) {
@@ -119,21 +121,17 @@ class RequestHandler {
           engine._setValue(internal.awaitingBridgeCall.resultTo, bridgeResult);
         }
         
-        // Находим индекс шага с bridge:call. Это упрощенная реализация.
         const lastStepIndex = (routeConfig.steps || []).findIndex(s => s['bridge:call'] && s['bridge:call'].await);
         const remainingSteps = (routeConfig.steps || []).slice(lastStepIndex + 1);
 
         delete engine.context._internal.interrupt;
         delete engine.context._internal.awaitingBridgeCall;
         
-        // Запускаем оставшиеся шаги
         await engine.run(remainingSteps);
         
-        // Завершаем action, отправляя ответ через сокет, т.к. исходный HTTP-запрос уже завершен.
         await this._finalizeAction(engine, routeConfig, req, null);
       };
       
-      // Регистрируем продолжение и немедленно отправляем ответ на HTTP-запрос
       const httpResponsePayload = await this.socketEngine.registerContinuation(
           context.socketId, 
           internal.awaitingBridgeCall.details, 
@@ -176,12 +174,11 @@ class RequestHandler {
       responsePayload.redirect = internalActions.redirect;
     } else if (routeConfig.update) {
       const currentUrl = req ? new URL(req.url, `http://${req.headers.host}`) : null;
-      // В renderComponent передаем полный контекст, включая user, globals и т.д.
       const renderContext = { data: finalContext.data, user: finalContext.user, globals: this.manifest.globals };
       responsePayload = await this.renderer.renderComponent(routeConfig.update, renderContext, currentUrl);
-      // Предполагаем, что контейнер имеет ID по имени компонента
+      
       const componentConfig = this.manifest.components[routeConfig.update];
-      const componentRootId = componentConfig.rootId || routeConfig.update; // (Задел на будущее)
+      const componentRootId = componentConfig.rootId || routeConfig.update;
       responsePayload.targetSelector = `#${componentRootId}-container`;
     }
     
@@ -189,7 +186,6 @@ class RequestHandler {
       responsePayload.bridgeCalls = internalActions.bridgeCalls;
     }
 
-    // `res` будет null, если это продолжение интерактивного вызова
     if (res && !res.headersSent) {
       if (sessionCookie) {
         res.setHeader('Set-Cookie', sessionCookie);
@@ -197,7 +193,6 @@ class RequestHandler {
       this._sendResponse(res, 200, responsePayload, 'application/json');
     } 
     else if (routeConfig.update && finalContext.socketId) {
-        // Если `res` нет, но есть обновление, отправляем его через сокет
         this.socketEngine.sendToClient(finalContext.socketId, {
             type: 'html_update',
             payload: responsePayload
@@ -211,10 +206,9 @@ class RequestHandler {
     const routes = this.manifest.routes || {};
     const key = `${method} ${pathname}`;
     if (routes[key]) {
-      routes[key].key = key; // Добавляем ключ для самоидентификации
+      routes[key].key = key;
       return routes[key];
     }
-    // Здесь можно добавить поддержку динамических роутов в будущем
     return null;
   }
 
@@ -237,8 +231,15 @@ class RequestHandler {
 
   _sendResponse(res, statusCode, data, contentType = 'text/plain') {
     if (res.headersSent) return;
-    const body = (contentType.includes('json')) ? JSON.stringify(data) : data;
-    res.writeHead(statusCode, { 'Content-Type': contentType, 'Content-Length': Buffer.byteLength(body) }).end(body);
+    
+
+    // Гарантируем, что `data` становится строкой, если это объект.
+    const body = (typeof data === 'object' && data !== null) ? JSON.stringify(data) : String(data);
+
+    res.writeHead(statusCode, { 
+        'Content-Type': contentType, 
+        'Content-Length': Buffer.byteLength(body) 
+    }).end(body);
   }
 }
 
