@@ -1,13 +1,13 @@
-# Dependencies
-/node_modules
-
-# AxleLLM Data
-/axle-db-data
-
-# Build output
-/dist
-
-# Log files
+# Node
+node_modules
+dist
+.npm
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+
+# Database
+axle-db-data
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store

@@ -1,7 +1,7 @@
 // packages/axle-llm/core/commands.js
 
 const path = require('path');
-const fs = require('fs'); // ★★★ ДОБАВЛЯЕМ МОДУЛЬ FS ★★★
+const fs = require('fs');
 const electron = require('electron');
 const { spawn } = require('child_process');
 const builder = require('electron-builder');
@@ -14,6 +14,33 @@ const C_RED = '\x1b[31m';
 const C_YELLOW = '\x1b[33m';
 const C_CYAN = '\x1b[36m';
 const C_GREEN = '\x1b[32m';
+
+/**
+ * Ищет корневую папку монорепозитория, двигаясь вверх от текущей директории.
+ * @param {string} startPath - Путь, с которого начинается поиск.
+ * @returns {string|null} - Путь к корню монорепозитория или null, если не найден.
+ */
+function findMonorepoRoot(startPath) {
+  let currentPath = startPath;
+  // Двигаемся вверх, пока не дойдем до корня диска
+  while (currentPath !== path.parse(currentPath).root) {
+    const pkgPath = path.join(currentPath, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        // Если в package.json есть поле "workspaces", мы нашли корень.
+        if (pkg.workspaces) {
+          return currentPath;
+        }
+      } catch (e) {
+        // Игнорируем некорректные JSON-файлы
+      }
+    }
+    currentPath = path.dirname(currentPath);
+  }
+  return null; // Корень монорепозитория не найден
+}
+
 
 function runDev(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in DEV mode...${C_RESET}`);
@@ -53,36 +80,45 @@ async function runPackage(appPath) {
   }
   
   try {
-    // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
-    // Шаг 1: Прочитать package.json приложения, которое мы собираем.
-    const appPackageJsonPath = path.join(appPath, 'package.json');
-    const appPackageJson = JSON.parse(fs.readFileSync(appPackageJsonPath, 'utf-8'));
+    // Ищем корень монорепозитория, начиная с папки приложения
+    const monorepoRoot = findMonorepoRoot(appPath);
+    
+    // Определяем, где искать package.json с devDependencies
+    const packageJsonPath = monorepoRoot 
+      ? path.join(monorepoRoot, 'package.json') // Если мы в монорепо, берем корневой package.json
+      : path.join(appPath, 'package.json');      // Иначе (для старых проектов), берем локальный
+
+    if (!fs.existsSync(packageJsonPath)) {
+        throw new Error(`Could not find package.json at ${packageJsonPath}`);
+    }
+
+    console.log(`${C_CYAN}[axle-cli] Using config from: ${packageJsonPath}${C_RESET}`);
+
+    const appPackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     const electronVersion = appPackageJson.devDependencies?.electron;
 
     if (!electronVersion) {
-      throw new Error(`'electron' version not found in devDependencies of ${appPackageJsonPath}`);
+      throw new Error(`'electron' version not found in devDependencies of ${packageJsonPath}`);
     }
     
     console.log(`${C_CYAN}[axle-cli] Using Electron version: ${electronVersion}${C_RESET}`);
     
-    // Шаг 2: Передать эту версию напрямую в конфигурацию electron-builder.
+    // Собираем мы все равно папку приложения (`appPath`), а не корень монорепо
     const result = await builder.build({
       projectDir: appPath,
       config: {
         "directories": {
           "output": path.join(appPath, "dist")
         },
-        "electronVersion": electronVersion // Это решает проблему авто-детекции.
+        "electronVersion": electronVersion
       }
     });
-    // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
 
     console.log(`${C_GREEN}✅ Packaging complete! Files are located at:${C_RESET}`);
     result.forEach(p => console.log(`  - ${p}`));
 
   } catch (error) {
     console.error(`\n${C_RED}🚨 Packaging failed:${C_RESET}`);
-    // Печатаем более детальную ошибку, если она есть
     console.error(error.stack || error);
     process.exit(1);
   }

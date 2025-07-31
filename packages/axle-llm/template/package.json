@@ -1,21 +1,17 @@
 {
   "name": "<APP_NAME>",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "A new desktop application powered by axleLLM",
-  "author": "",
-  "main": "node_modules/axle-llm/main.js",
+  "description": "A new monorepo project powered by axleLLM",
   "scripts": {
-    "dev": "axle-cli dev",
-    "start": "axle-cli start",
-    "package": "axle-cli package",
-    "seed": "node seed.js"
+    "dev": "npm run dev --workspace=app",
+    "start": "npm run start --workspace=app",
+    "package": "npm run package --workspace=app",
+    "seed": "npm run seed --workspace=app"
   },
-  "dependencies": {
-    "axle-llm": "2.2.9",
-    "bcrypt": "6.0.0",
-    "wise-json-db": "6.0.2"
-  },
+  "workspaces": [
+    "packages/*"
+  ],
   "devDependencies": {
     "electron": "37.2.4",
     "electron-builder": "26.0.19"
