@@ -22,64 +22,65 @@ Understanding the philosophy is critical to using the framework correctly.
 
 ## 2. Standard Project Structure
 
-The `npx axle-llm new <app-name>` command generates a standardized, self-contained project. Understanding the role of each file and directory is essential.
+The `npx axle-llm new <app-name>` command generates a professional **monorepo** structure. This setup provides maximum stability and transparency, allowing you to see both your application code and the engine's source code side-by-side.
+
+**Your work is focused almost exclusively inside the `packages/app/` directory.**
 
 ```
-my-app/
+<app-name>/
 │
-├── app/  # Contains the "physical" assets of your application.
+├── packages/
 │   │
-│   ├── actions/      # Houses imperative JavaScript modules for complex logic.
-│   │   │             # Used by `run` and `run:set` steps in routes.
-│   │   │             # Example: `calculateTotals.js`
-│   │   │
-│   ├── bridge/       # Houses custom Node.js modules for native OS interaction.
-│   │   │             # These are the implementation details for your server-side bridge.
-│   │   │             # Example: `fileSaver.js`
-│   │   │
-│   └── components/   # Houses all UI definition files.
-│       │             # Contains .html templates and their corresponding .css style files.
-│       │             # Example: `user-profile.html`, `user-profile.css`
-│
-├── manifest/ # The architectural blueprint of your application.
+│   ├── axle-llm/   # The complete source code of the AxleLLM engine.
+│   │   │           # You generally don't need to touch this, but it's here for transparency and advanced debugging.
+│   │   └── ...
 │   │
-│   ├── bridge.js     # **The Whitelist.** Defines every native function the app can call.
-│   ├── components.js # **The UI Registry.** Maps component names to their .html/.css files and defines their data contracts (schemas).
-│   ├── connectors.js # **The Data Layer.** Defines all data sources, their type (in-memory or persistent), and their initial state.
-│   └── routes.js     # **The Logic Layer.** Defines all `view` endpoints for rendering UI and all `action` endpoints for executing business logic via `steps`.
+│   └── app/        # ★★★ YOUR APPLICATION WORKSPACE ★★★
+│       │
+│       ├── app/  # Contains the "physical" assets of your application.
+│       │   │
+│       │   ├── actions/      # Houses imperative JavaScript modules for complex logic.
+│       │   ├── bridge/       # Houses custom Node.js modules for native OS interaction.
+│       │   └── components/   # Houses all UI definition files (.html, .css).
+│       │
+│       ├── manifest/ # The architectural blueprint of your application.
+│       │   │
+│       │   ├── bridge.js     # The Whitelist for native functions.
+│       │   ├── components.js # The UI Registry and data schemas.
+│       │   ├── connectors.js # The Data Layer definition.
+│       │   └── routes.js     # The Logic Layer (views and actions).
+│       │
+│       ├── manifest.js       # The root configuration file for your app.
+│       │
+│       ├── axle-db-data/     # (Generated at runtime) Storage for persistent data.
+│       │
+│       └── package.json      # Your app's specific dependencies (e.g., `wise-json-db`).
 │
-├── manifest.js       # The root configuration file for high-level settings like window properties, theming, and global variables.
+├── node_modules/             # Shared dependencies for the entire monorepo.
 │
-├── axle-db-data/     # (Generated at runtime) Storage location for `wise-json` connectors.
+├── .gitignore
 │
-└── package.json      # Standard Node.js file for project dependencies and scripts.
+└── package.json              # The root package.json for the monorepo (manages workspaces, Electron).
 ```
 
 ---
 
 ## 3. High-Level Data Flow
 
-The engine follows a strict, unidirectional data flow for every user interaction.
+The engine follows a strict, unidirectional data flow for every user interaction. This logic remains unchanged.
 
-1.  **Event Trigger:** A user interacts with a UI element that has an `atom-action` attribute (e.g., `<button atom-action="POST /action/save-user">`).
+1.  **Event Trigger:** A user interacts with a UI element that has an `atom-action` attribute.
 
-2.  **Request to Server:** The client-side engine captures the event, packages the relevant data (e.g., from a form), and sends an HTTP request to the internal server running within Electron.
+2.  **Request to Server:** The client-side engine captures the event, packages the data, and sends an HTTP request to the internal server.
 
-3.  **Route Matching:** The server finds the corresponding `action` route in `manifest/routes.js` (e.g., `"POST /action/save-user": { ... }`).
+3.  **Route Matching:** The server finds the corresponding `action` route in `packages/app/manifest/routes.js`.
 
-4.  **Context Assembly:**
-    *   The engine identifies the connectors listed in the route's `reads` array (e.g., `["user"]`).
-    *   It retrieves the current data from those connectors.
-    *   It assembles an `execution context` object containing this data, available under the `data` key (e.g., `{ data: { user: { ... } } }`). The context also includes form data (`body`) and session data (`user`).
+4.  **Context Assembly:** The engine retrieves data from the connectors listed in the route's `reads` array.
 
-5.  **Sequential Step Execution:** The engine executes the `steps` array defined in the route, one by one. Each step operates on the `execution context`.
-    *   `{ "set": "data.user.name", "to": "body.newName" }` modifies the user's name *within the temporary context*.
+5.  **Sequential Step Execution:** The engine executes the `steps` array defined in the route, one by one.
 
-6.  **Data Persistence:** After the final step has been executed without error, the engine checks the route's `writes` array (e.g., `["user"]`). It takes the final state of `data.user` from the context and saves it back to the `user` connector, persisting the change.
+6.  **Data Persistence:** The engine saves the modified data back to the connectors listed in the route's `writes` array.
 
-7.  **UI Invalidation and Re-rendering:**
-    *   The engine checks the route's `update` property (e.g., `"userProfile"`).
-    *   It re-renders the `userProfile` component, passing it the new, updated data from the context.
-    *   The resulting HTML and CSS are sent back to the client.
+7.  **UI Invalidation and Re-rendering:** The engine re-renders the component specified in the route's `update` property.
 
-8.  **DOM Patching:** The client-side engine receives the new HTML and intelligently replaces the old component in the DOM with the new version.```
+8.  **DOM Patching:** The client-side engine intelligently replaces the old component in the DOM with the new version.
