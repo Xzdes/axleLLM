@@ -1,4 +1,4 @@
-# AxleLLM: Workflow & Commands for LLM
+# AxleLLM: Workflow and Commands
 
 **Objective:** To provide the standard operating procedures for designing and modifying AxleLLM applications. Your role is **System Architect**. You will not write imperative code; you will declare the system's architecture in the `manifest/` directory.
 
