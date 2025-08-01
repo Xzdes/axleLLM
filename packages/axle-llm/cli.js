@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+// runDev и остальные не нужны для команды 'new', убираем для чистоты
 const { runDev, runStart, runPackage } = require('./core/commands');
 
 const command = process.argv[2];
@@ -30,13 +31,21 @@ switch (command) {
     runPackage(appPath);
     break;
   default:
+    // Добавим помощь, если команда не распознана
+    console.log('Usage: axle-cli [new|dev|start|package]');
     break;
 }
 
 function createNewMonorepo(name) {
   const projectDir = path.join(process.cwd(), name);
   const templateDir = path.join(__dirname, 'template');
+
+  // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+
+  // Исходная папка движка, где бы он ни был запущен (локально или из кэша npx)
   const engineSourceDir = __dirname;
+  // Целевая папка для движка в новом проекте
+  const engineDestDir = path.join(projectDir, 'packages', 'axle-llm');
 
   console.log(`Creating a new axleLLM monorepo in ${C_GREEN}${projectDir}${C_RESET}...`);
 
@@ -45,16 +54,36 @@ function createNewMonorepo(name) {
     process.exit(1);
   }
 
-  // 1. Копируем шаблон
+  // 1. Копируем ШАБЛОН приложения (этот шаг работал правильно)
   fs.cpSync(templateDir, projectDir, { recursive: true });
 
-  // 2. Копируем исходный код движка
-  const engineDestDir = path.join(projectDir, 'packages', 'axle-llm');
+  // 2. Копируем ЯДРО движка (здесь была ошибка)
   fs.mkdirSync(engineDestDir, { recursive: true });
-  fs.cpSync(engineSourceDir, engineDestDir, { 
-    recursive: true,
-    filter: (src) => !src.includes('node_modules') && !src.includes('template-legacy') && !src.includes('template')
-  });
+
+  // Список того, что составляет ядро движка.
+  // Это самый надежный способ, так как он не зависит от путей.
+  const coreFilesAndDirs = [
+    'core',
+    'client',
+    'cli.js',
+    'index.js',
+    'main.js',
+    'package.json' // Важно скопировать и package.json самого движка!
+  ];
+
+  for (const item of coreFilesAndDirs) {
+    const sourcePath = path.join(engineSourceDir, item);
+    const destPath = path.join(engineDestDir, item);
+
+    if (fs.existsSync(sourcePath)) {
+        // Используем cpSync, так как он умеет копировать и файлы, и папки рекурсивно
+        fs.cpSync(sourcePath, destPath, { recursive: true });
+    } else {
+        console.warn(`Warning: source item not found and was skipped: ${sourcePath}`);
+    }
+  }
+
+  // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
 
   const safeName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
@@ -67,7 +96,7 @@ function createNewMonorepo(name) {
   // 4. Настраиваем package.json приложения
   const appPackageJsonPath = path.join(projectDir, 'packages', 'app', 'package.json');
   let appPackageJson = fs.readFileSync(appPackageJsonPath, 'utf8');
-  appPackageJson = appPackageJson.replace(/<APP_NAME>/g, name); // Используем оригинальное имя для productName
+  appPackageJson = appPackageJson.replace(/<APP_NAME>/g, name);
   fs.writeFileSync(appPackageJsonPath, appPackageJson);
 
 
