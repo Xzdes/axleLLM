@@ -3,7 +3,7 @@
   'use strict';
   let socketId = null;
   let currentSearchController = null;
-  let ws = null; // Делаем WebSocket доступным глобально в модуле
+  let ws = null; 
 
   function initialize() {
     console.log('[axle-client] Initializing...');
@@ -56,25 +56,39 @@
     event.preventDefault();
     const targetUrl = new URL(link.href);
     if (window.location.href === targetUrl.href) return;
+    
     try {
         const response = await fetch(targetUrl.href, { headers: { 'X-Requested-With': 'axleLLM-SPA' } });
         if (!response.ok) throw new Error(`SPA navigation failed: ${response.status}`);
         const payload = await response.json();
+        
         if (payload.redirect) {
             _spaRedirect(payload.redirect); 
             return;
         }
+
+        console.log('[axle-client] Received SPA payload:', payload);
+
         document.title = payload.title || document.title;
+        
+        if (payload.bodyClass) {
+          document.body.className = payload.bodyClass;
+        }
+
         _updateStylesForSpa(payload.styles);
 
         for (const partName in payload.injectedParts) {
-            const containerId = `${partName}-container`;
-            const container = document.getElementById(containerId);
+            // ★★★ УЛУЧШЕННЫЙ ПОИСК КОНТЕЙНЕРА ★★★
+            // Сервер генерирует ID вида `pageContent-container`, ищем его.
+            const container = document.getElementById(`${partName}-container`);
             if (container) {
                 container.innerHTML = payload.injectedParts[partName];
+            } else {
+                console.warn(`[axle-client] SPA Navigation: Container for '${partName}' with ID '${partName}-container' not found.`);
             }
         }
         history.pushState({ spaUrl: targetUrl.href }, payload.title, targetUrl.href);
+
     } catch (error) {
         console.error('[axle-client] SPA Navigation failed:', error);
         window.location.href = targetUrl.href;
@@ -91,51 +105,6 @@
 
   async function _processServerPayload(payload, targetSelector, triggerElement) {
     if (payload.redirect) { _spaRedirect(payload.redirect); return; }
-    
-    // --- Обработка "fire-and-forget" вызовов ---
-    if (payload.bridgeCalls && Array.isArray(payload.bridgeCalls)) {
-        if (window.axle && window.axle.bridge) {
-            payload.bridgeCalls.forEach(call => {
-                window.axle.bridge.call(call.api, call.args)
-                    .then(result => console.log(`[axle-bridge] Call to '${call.api}' successful.`, result))
-                    .catch(err => console.error(`[axle-bridge] Call to '${call.api}' failed.`, err));
-            });
-        } else {
-            console.error('[axle-client] Received bridge calls but window.axle.bridge is not available!');
-        }
-    }
-
-    // --- Обработка ИНТЕРАКТИВНЫХ вызовов ---
-    if (payload.awaitingBridgeCall) {
-        if (window.axle && window.axle.bridge && ws && ws.readyState === WebSocket.OPEN) {
-            const call = payload.awaitingBridgeCall;
-            try {
-                // Выполняем вызов и ЖДЕМ результата от пользователя
-                const result = await window.axle.bridge.call(call.api, call.args);
-                
-                // Отправляем результат обратно на сервер по WebSocket
-                ws.send(JSON.stringify({
-                    type: 'bridge_call_response',
-                    payload: {
-                        callId: call.callId,
-                        result: result
-                    }
-                }));
-            } catch(err) {
-                console.error(`[axle-bridge] Awaitable call to '${call.api}' failed.`, err)
-                // Отправляем ошибку обратно
-                ws.send(JSON.stringify({
-                    type: 'bridge_call_response',
-                    payload: {
-                        callId: call.callId,
-                        error: err.message
-                    }
-                }));
-            }
-        } else {
-             console.error('[axle-client] Received an awaitable bridge call but window.axle.bridge or WebSocket is not available!');
-        }
-    }
 
     if (payload.html && targetSelector) {
       const targetElement = document.querySelector(targetSelector);
@@ -154,13 +123,8 @@
       targetElement.innerHTML = payload.html;
       
       if (payload.styles && payload.componentName) {
-        let styleTag = document.querySelector(`style[data-component-name="${payload.componentName}"]`);
-        if (!styleTag) {
-          styleTag = document.createElement('style');
-          styleTag.setAttribute('data-component-name', payload.componentName);
-          document.head.appendChild(styleTag);
-        }
-        styleTag.textContent = payload.styles;
+        // При обновлении одного компонента мы просто добавляем/обновляем его стиль
+        _updateSingleComponentStyle(payload.componentName, payload.styles);
       }
       
       if (activeElementId) {
@@ -175,24 +139,39 @@
     }
   }
 
+  function _updateSingleComponentStyle(componentName, css) {
+      let styleTag = document.head.querySelector(`style[data-component-name="${componentName}"]`);
+      if (!styleTag) {
+          styleTag = document.createElement('style');
+          styleTag.setAttribute('data-component-name', componentName);
+          document.head.appendChild(styleTag);
+      }
+      styleTag.textContent = css;
+  }
+
   function _updateStylesForSpa(styles) {
+    console.log('[axle-client] Updating all SPA styles...');
     document.querySelectorAll('style[data-component-name]').forEach(tag => tag.remove());
     (styles || []).forEach(styleInfo => {
-        const styleTag = document.createElement('style');
-        styleTag.setAttribute('data-component-name', styleInfo.name);
-        styleTag.textContent = styleInfo.css;
-        document.head.appendChild(styleTag);
+        _updateSingleComponentStyle(styleInfo.name, styleInfo.css);
     });
   }
 
   function _getActionBody(element) {
     const form = element.closest('form');
+    const payload = element.getAttribute('atom-payload');
     const data = {};
     if (form) {
       const formData = new FormData(form);
       for (const [key, value] of formData.entries()) { data[key] = value; }
     }
-    if (element.name && element.value !== undefined) { data[element.name] = element.value; }
+    if (payload) {
+      try { Object.assign(data, JSON.parse(payload)); }
+      catch(e) { console.error('Invalid atom-payload JSON:', payload); }
+    }
+    if (element.name && element.value !== undefined && !data.hasOwnProperty(element.name)) { 
+        data[element.name] = element.value; 
+    }
     return JSON.stringify(data);
   }
 
@@ -208,23 +187,11 @@
         if (data.type === 'socket_id_assigned') {
           socketId = data.id;
           console.log(`[axle-client] WebSocket ID assigned: ${socketId}`);
-          document.querySelectorAll('[atom-socket]').forEach(element => {
-            const channelName = element.getAttribute('atom-socket');
-            if (channelName) { ws.send(JSON.stringify({ type: 'subscribe', channel: channelName })); }
-          });
           return;
         }
-        // Сервер может прислать новый HTML для обновления части страницы
         if (data.type === 'html_update' && data.payload) {
             _processServerPayload(data.payload, data.payload.targetSelector);
             return;
-        }
-        // Любое другое событие, на которое подписан компонент
-        if (data.event) {
-          document.querySelectorAll(`[atom-on-event="${data.event}"]`).forEach(element => {
-            const fakeEvent = new Event('click', { bubbles: true, cancelable: true });
-            element.dispatchEvent(fakeEvent);
-          });
         }
       } catch (e) { console.error('[axle-client] Failed to handle WebSocket message:', e); }
     };

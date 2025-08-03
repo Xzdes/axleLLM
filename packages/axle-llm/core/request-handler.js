@@ -32,6 +32,7 @@ class RequestHandler {
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
       const isSpaRequest = req.headers['x-requested-with'] === 'axleLLM-SPA';
+      
       if (url.pathname === '/engine-client.js') {
         const clientScriptPath = path.resolve(__dirname, '..', 'client', 'engine-client.js');
         const scriptContent = fs.readFileSync(clientScriptPath, 'utf-8');
@@ -47,9 +48,9 @@ class RequestHandler {
       if (routeConfig.auth?.required && !user) {
         const redirectUrl = routeConfig.auth.failureRedirect || '/login';
         if (routeConfig.type === 'action' || isSpaRequest) {
-            this._sendResponse(res, 200, { redirect: redirectUrl }, 'application/json');
+          this._sendResponse(res, 200, { redirect: redirectUrl }, 'application/json');
         } else {
-            this.authEngine.redirect(res, redirectUrl);
+          this.authEngine.redirect(res, redirectUrl);
         }
         return;
       }
@@ -57,17 +58,44 @@ class RequestHandler {
       if (routeConfig.type === 'view') {
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
         const renderContext = { data: dataContext, user, globals: this.manifest.globals, url: this.renderer._getUrlContext(url) };
-        if (isSpaRequest) {
-          const spaPayload = { title: this.manifest.launch.title, styles: [], injectedParts: {} };
-          
-          for (const placeholder in routeConfig.inject) {
-              const componentToInject = routeConfig.inject[placeholder];
-              const { html, styles } = await this.renderer._renderComponentRecursive(componentToInject, renderContext, routeConfig.inject);
-              spaPayload.injectedParts[placeholder] = html;
-              spaPayload.styles.push(...styles);
-          }
 
-          this._sendResponse(res, 200, spaPayload, 'application/json');
+        if (isSpaRequest) {
+            const spaPayload = {
+                title: this.manifest.launch.title,
+                styles: [],
+                injectedParts: {},
+                bodyClass: renderContext.user ? 'app-mode' : 'auth-mode'
+            };
+    
+            const styleMap = new Map();
+    
+            for (const placeholder in routeConfig.inject) {
+                const componentToInject = routeConfig.inject[placeholder];
+                if (!componentToInject) continue;
+    
+                const result = await this.renderer._renderComponentRecursive(
+                    componentToInject, renderContext, routeConfig.inject, false
+                );
+    
+                spaPayload.injectedParts[placeholder] = result.html;
+    
+                result.styles.forEach(style => {
+                    if (!styleMap.has(style.name)) {
+                        styleMap.set(style.name, style);
+                    }
+                });
+            }
+    
+            const layoutAsset = this.assetLoader.getComponent(routeConfig.layout);
+            if (layoutAsset && layoutAsset.style) {
+                if (!styleMap.has(routeConfig.layout)) {
+                    styleMap.set(routeConfig.layout, { name: routeConfig.layout, css: layoutAsset.style });
+                }
+            }
+    
+            spaPayload.styles = Array.from(styleMap.values());
+    
+            this._sendResponse(res, 200, spaPayload, 'application/json');
         } else {
           const html = await this.renderer.renderView(routeConfig, renderContext, url);
           this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
@@ -76,12 +104,11 @@ class RequestHandler {
         const body = await this._parseBody(req);
         const socketId = req.headers['x-socket-id'] || null;
         const initialContext = { user, body, socketId, routeName: routeConfig.key };
-        
         await this.runAction(initialContext, req, res);
       }
     } catch (error) {
       console.error(`[RequestHandler] Error processing request ${req.method} ${req.url}:`, error);
-      if (!res.headersSent) { this._sendResponse(res, 500, 'Internal Server Error'); }
+      if (res && !res.headersSent) { this._sendResponse(res, 500, 'Internal Server Error'); }
     }
   }
   
@@ -91,16 +118,13 @@ class RequestHandler {
 
     const dataContext = context.data || await this.connectorManager.getContext(routeConfig.reads || []);
     const executionContext = { ...context, data: dataContext };
-    
     const engine = new ActionEngine(executionContext, this.appPath, this.assetLoader, this);
     
     try {
         await engine.run(routeConfig.steps || []);
     } catch (engineError) {
         console.error(`[RequestHandler] ActionEngine failed for route '${context.routeName}'.`, engineError.message);
-        
         if (res && !res.headersSent) {
-            // Создаем простой объект для ответа и передаем только сообщение об ошибке.
             const errorPayload = { error: 'Action execution failed', details: engineError.message };
             this._sendResponse(res, 500, errorPayload, 'application/json');
         }
@@ -111,37 +135,7 @@ class RequestHandler {
       return { data: engine.context.data };
     }
     
-    const internal = engine.context._internal || {};
-
-    if (internal.awaitingBridgeCall) {
-      if (!context.socketId) throw new Error("Awaitable bridge call requires a client with a valid socketId.");
-      
-      const continuation = async (bridgeResult) => {
-        if (internal.awaitingBridgeCall.resultTo) {
-          engine._setValue(internal.awaitingBridgeCall.resultTo, bridgeResult);
-        }
-        
-        const lastStepIndex = (routeConfig.steps || []).findIndex(s => s['bridge:call'] && s['bridge:call'].await);
-        const remainingSteps = (routeConfig.steps || []).slice(lastStepIndex + 1);
-
-        delete engine.context._internal.interrupt;
-        delete engine.context._internal.awaitingBridgeCall;
-        
-        await engine.run(remainingSteps);
-        
-        await this._finalizeAction(engine, routeConfig, req, null);
-      };
-      
-      const httpResponsePayload = await this.socketEngine.registerContinuation(
-          context.socketId, 
-          internal.awaitingBridgeCall.details, 
-          continuation
-      );
-      this._sendResponse(res, 200, httpResponsePayload, 'application/json');
-
-    } else {
-      await this._finalizeAction(engine, routeConfig, req, res);
-    }
+    await this._finalizeAction(engine, routeConfig, req, res);
   }
 
   async _finalizeAction(engine, routeConfig, req, res) {
@@ -158,14 +152,17 @@ class RequestHandler {
         }
     }
     
-    if (routeConfig.internal) return finalContext;
-
     for (const key of (routeConfig.writes || [])) {
       if (finalContext.data[key]) {
         await this.connectorManager.getConnector(key).write(finalContext.data[key]);
+        
+        // ★★★ НАЧАЛО ИСПРАВЛЕНИЯ ★★★
+        // После записи данных в коннектор, мы должны уведомить об этом SocketEngine,
+        // чтобы он мог разослать обновления всем подписанным клиентам.
         if (this.socketEngine) {
-          await this.socketEngine.notifyOnWrite(key, finalContext.socketId);
+            await this.socketEngine.notifyOnWrite(key, finalContext.socketId);
         }
+        // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
       }
     }
 
@@ -176,30 +173,17 @@ class RequestHandler {
       const currentUrl = req ? new URL(req.url, `http://${req.headers.host}`) : null;
       const renderContext = { data: finalContext.data, user: finalContext.user, globals: this.manifest.globals };
       responsePayload = await this.renderer.renderComponent(routeConfig.update, renderContext, currentUrl);
-      
       const componentConfig = this.manifest.components[routeConfig.update];
-      const componentRootId = componentConfig.rootId || routeConfig.update;
-      responsePayload.targetSelector = `#${componentRootId}-container`;
+      const componentRootId = componentConfig.template.match(/id="([^"]+)"/)?.[1] || routeConfig.update;
+      responsePayload.targetSelector = `#${componentRootId}`;
     }
     
-    if (internalActions.bridgeCalls) {
-      responsePayload.bridgeCalls = internalActions.bridgeCalls;
-    }
-
     if (res && !res.headersSent) {
       if (sessionCookie) {
         res.setHeader('Set-Cookie', sessionCookie);
       }
       this._sendResponse(res, 200, responsePayload, 'application/json');
     } 
-    else if (routeConfig.update && finalContext.socketId) {
-        this.socketEngine.sendToClient(finalContext.socketId, {
-            type: 'html_update',
-            payload: responsePayload
-        });
-    }
-    
-    return { data: finalContext.data };
   }
 
   _findRoute(method, pathname) {
@@ -231,11 +215,7 @@ class RequestHandler {
 
   _sendResponse(res, statusCode, data, contentType = 'text/plain') {
     if (res.headersSent) return;
-    
-
-    // Гарантируем, что `data` становится строкой, если это объект.
     const body = (typeof data === 'object' && data !== null) ? JSON.stringify(data) : String(data);
-
     res.writeHead(statusCode, { 
         'Content-Type': contentType, 
         'Content-Length': Buffer.byteLength(body) 
