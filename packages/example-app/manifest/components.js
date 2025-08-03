@@ -4,21 +4,25 @@ module.exports = {
   "mainLayout": "main-layout.html",
   "authLayout": { "template": "auth-layout.html" },
 
-  // --- Страницы (Pages) ---
-  "cashierPage": { "template": "cashier-page.html" },
+  // ★★★ НАЧАЛО ИСПРАВЛЕНИЯ ★★★
+  // Мы явно указываем, что у этого компонента есть и шаблон, и стиль.
+  // Так как у него нет отдельного CSS-файла, движок поймет,
+  // что стили находятся внутри самого .html файла.
+  "cashierPage": { 
+    "template": "cashier-page.html",
+    "style": "cashier-page.html" // Указываем тот же файл
+  },
+  // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
 
   // --- Компоненты (Components) ---
   "header": "header.html",
   "loginForm": { "template": "login-form.html" },
   "registerForm": { "template": "register-form.html" },
   
-  // ★★★ НАЧАЛО НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
   "receipt": { 
     "template": "receipt.html", 
     "style": "receipt.css",
     "schema": {
-      // Этот компонент заявляет, что для его работы ОБЯЗАТЕЛЬНО
-      // нужен коннектор 'receipt', доступный как data.receipt в шаблоне.
       "requires": ["receipt"],
       "variables": {
         "data.receipt.statusMessage": "String (optional)",
@@ -31,13 +35,11 @@ module.exports = {
       }
     }
   },
-  // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
 
   "positionsList": { 
     "template": "positionsList.html", 
     "style": "positionsList.css",
     "schema": {
-      // Этот компонент требует ДВА коннектора
       "requires": ["positions", "viewState"]
     }
   }
