@@ -1,7 +1,6 @@
 // packages/axle-llm/core/asset-loader.js
 const fs = require('fs');
 const path = require('path');
-const posthtml = require('posthtml');
 
 class AssetLoader {
   constructor(appPath, manifest) {
@@ -44,51 +43,27 @@ class AssetLoader {
       }
       
       const templatePath = path.join(componentsDir, templateFilename);
-      let htmlContent;
 
       try {
-        htmlContent = fs.readFileSync(templatePath, 'utf-8');
+        // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+        const htmlContent = fs.readFileSync(templatePath, 'utf-8');
+        
+        // Просто сохраняем весь HTML-контент как шаблон.
+        // Renderer сам разберется со стилями.
+        componentData.template = htmlContent;
+
+        // Если в манифесте указан отдельный файл стилей, загружаем его.
+        if (styleFilename) {
+            const stylePath = path.join(componentsDir, styleFilename);
+            try {
+                componentData.style = fs.readFileSync(stylePath, 'utf-8');
+            } catch (e) {
+                console.warn(`[AssetLoader] WARN: Style file not found at ${stylePath}`);
+            }
+        }
+        // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
       } catch (error) {
         throw new Error(`[AssetLoader] CRITICAL: Template file not found for component '${name}' at path: ${templatePath}`);
-      }
-      
-      let extractedStyle = '';
-      
-      // Создаем плагин, который использует правильный метод tree.walk()
-      const styleExtractorPlugin = (tree) => {
-        // tree.walk() проходит по каждому узлу в HTML-дереве
-        tree.walk((node) => {
-          // Если узел существует и является тегом <style>
-          if (node && node.tag === 'style') {
-            // Мы забираем его содержимое
-            extractedStyle += (node.content || []).join('').trim();
-            // И "удаляем" узел из дерева, чтобы он не попал в финальный HTML-шаблон
-            node.tag = false; // Эффективный способ удалить тег
-            node.content = null;
-          }
-          return node; // Возвращаем узел (измененный или нет)
-        });
-        return tree;
-      };
-
-      // Синхронно обрабатываем HTML, применяя наш плагин
-      const result = posthtml([styleExtractorPlugin]).process(htmlContent, { sync: true });
-      
-      // result.html теперь содержит HTML БЕЗ тегов <style>
-      componentData.template = result.html;
-
-      // Логика определения, какой стиль использовать:
-      if (styleFilename && styleFilename !== templateFilename) {
-        // 1. Если указан отдельный .css файл, используем его
-        const stylePath = path.join(componentsDir, styleFilename);
-        try {
-          componentData.style = fs.readFileSync(stylePath, 'utf-8');
-        } catch (error) {
-          console.warn(`[AssetLoader] WARN: Style file not found for component '${name}' at path: ${stylePath}.`);
-        }
-      } else if (extractedStyle) {
-        // 2. Иначе, если мы извлекли стили из <style>, используем их
-        componentData.style = extractedStyle;
       }
       
       this.components[name] = componentData;
