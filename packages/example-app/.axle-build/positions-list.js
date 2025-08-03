@@ -25,11 +25,11 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var positionsList_exports = {};
-__export(positionsList_exports, {
+var positions_list_exports = {};
+__export(positions_list_exports, {
   default: () => PositionsList
 });
-module.exports = __toCommonJS(positionsList_exports);
+module.exports = __toCommonJS(positions_list_exports);
 var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
 function PositionItem({ item }) {
