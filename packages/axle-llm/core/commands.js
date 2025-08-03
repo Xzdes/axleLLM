@@ -14,7 +14,6 @@ const C_YELLOW = '\x1b[33m';
 const C_CYAN = '\x1b[36m';
 const C_GREEN = '\x1b[32m';
 
-// ... (findMonorepoRoot function remains the same)
 function findMonorepoRoot(startPath) {
   let currentPath = startPath;
   while (currentPath !== path.parse(currentPath).root) {
@@ -31,7 +30,6 @@ function findMonorepoRoot(startPath) {
   }
   return null;
 }
-
 
 function runDev(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in DEV mode...${C_RESET}`);
@@ -51,20 +49,26 @@ function runDev(appPath) {
 
   buildProcess.stdout.on('data', (data) => {
     const output = data.toString();
-    // We print the build process output to the main console
     process.stdout.write(output); 
     
-    // Check if we received the signal and if Electron is not already running
     if (output.includes('// BUILD-COMPLETE //') && !electronProcess) {
-      console.log(`${C_CYAN}[axle-cli] Initial build finished. Launching Electron...${C_RESET}`);
+      console.log(`${C_CYAN}[axle-cli] Initial build finished. Launching Electron with verbose logging...${C_RESET}`);
       const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
       const args = [mainProcessPath, appPath, '--dev'];
   
-      electronProcess = spawn(electron, args, { stdio: 'inherit' });
+      electronProcess = spawn(electron, args, {
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          ELECTRON_ENABLE_LOGGING: 'true'
+        }
+      });
   
       electronProcess.on('close', code => {
         console.log(`${C_CYAN}[axle-cli] Application process exited with code ${code}.${C_RESET}`);
-        if (buildProcess) buildProcess.kill();
+        if (buildProcess) {
+          buildProcess.kill();
+        }
         process.exit(code);
       });
     }
@@ -86,8 +90,6 @@ function runDev(appPath) {
   });
 }
 
-// ... (runStart and runPackage remain mostly the same, but let's update them for consistency)
-
 function runStart(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in PRODUCTION mode...${C_RESET}`);
   console.log(`${C_CYAN}[axle-cli] Running production component build...${C_RESET}`);
@@ -108,7 +110,7 @@ function runStart(appPath) {
     const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
     const args = [mainProcessPath, appPath];
     const electronProcess = spawn(electron, args, { stdio: 'inherit' });
-    electronProcess.on('close', code => process.exit(code));
+    electronProcess.on('close', exitCode => process.exit(exitCode));
   });
 }
 

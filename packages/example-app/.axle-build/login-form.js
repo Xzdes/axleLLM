@@ -30,25 +30,8 @@ __export(login_form_exports, {
   default: () => LoginForm
 });
 module.exports = __toCommonJS(login_form_exports);
-var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
 function LoginForm({ url }) {
   const query = url?.query || {};
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { children: "\u0412\u0445\u043E\u0434 \u0432 \u0441\u0438\u0441\u0442\u0435\u043C\u0443" }),
-    query.registered && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: { color: "green", textAlign: "center" }, children: "\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0448\u043B\u0430 \u0443\u0441\u043F\u0435\u0448\u043D\u043E! \u0422\u0435\u043F\u0435\u0440\u044C \u0432\u044B \u043C\u043E\u0436\u0435\u0442\u0435 \u0432\u043E\u0439\u0442\u0438." }),
-    query.error && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "error", children: "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u043B\u043E\u0433\u0438\u043D \u0438\u043B\u0438 \u043F\u0430\u0440\u043E\u043B\u044C." }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", { "atom-action": "POST /auth/login", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "form-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { htmlFor: "login", children: "\u041B\u043E\u0433\u0438\u043D" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "text", id: "login", name: "login", required: true })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "form-group", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { htmlFor: "password", children: "\u041F\u0430\u0440\u043E\u043B\u044C" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", { type: "password", id: "password", name: "password", required: true })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "form-group", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "submit", children: "\u0412\u043E\u0439\u0442\u0438" }) })
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "links", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { href: "/register", children: "\u0423 \u043C\u0435\u043D\u044F \u0435\u0449\u0435 \u043D\u0435\u0442 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430" }) })
-  ] });
+  return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("h2", null, "\u0412\u0445\u043E\u0434 \u0432 \u0441\u0438\u0441\u0442\u0435\u043C\u0443"), query.registered && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "green", textAlign: "center" } }, "\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044F \u043F\u0440\u043E\u0448\u043B\u0430 \u0443\u0441\u043F\u0435\u0448\u043D\u043E! \u0422\u0435\u043F\u0435\u0440\u044C \u0432\u044B \u043C\u043E\u0436\u0435\u0442\u0435 \u0432\u043E\u0439\u0442\u0438."), query.error && /* @__PURE__ */ import_react.default.createElement("p", { className: "error" }, "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u043B\u043E\u0433\u0438\u043D \u0438\u043B\u0438 \u043F\u0430\u0440\u043E\u043B\u044C."), /* @__PURE__ */ import_react.default.createElement("form", { "atom-action": "POST /auth/login" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "form-group" }, /* @__PURE__ */ import_react.default.createElement("label", { htmlFor: "login" }, "\u041B\u043E\u0433\u0438\u043D"), /* @__PURE__ */ import_react.default.createElement("input", { type: "text", id: "login", name: "login", required: true })), /* @__PURE__ */ import_react.default.createElement("div", { className: "form-group" }, /* @__PURE__ */ import_react.default.createElement("label", { htmlFor: "password" }, "\u041F\u0430\u0440\u043E\u043B\u044C"), /* @__PURE__ */ import_react.default.createElement("input", { type: "password", id: "password", name: "password", required: true })), /* @__PURE__ */ import_react.default.createElement("div", { className: "form-group" }, /* @__PURE__ */ import_react.default.createElement("button", { type: "submit" }, "\u0412\u043E\u0439\u0442\u0438"))), /* @__PURE__ */ import_react.default.createElement("div", { className: "links" }, /* @__PURE__ */ import_react.default.createElement("a", { href: "/register" }, "\u0423 \u043C\u0435\u043D\u044F \u0435\u0449\u0435 \u043D\u0435\u0442 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430")));
 }

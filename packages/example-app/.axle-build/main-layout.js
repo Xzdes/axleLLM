@@ -30,12 +30,8 @@ __export(main_layout_exports, {
   default: () => MainLayout
 });
 module.exports = __toCommonJS(main_layout_exports);
-var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
 function MainLayout(props) {
   const { header: HeaderComponent, pageContent: PageComponent } = props;
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "header-container", children: HeaderComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HeaderComponent, { ...props }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("main", { id: "pageContent-container", children: PageComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageComponent, { ...props }) })
-  ] });
+  return /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { id: "header-container" }, HeaderComponent && /* @__PURE__ */ import_react.default.createElement(HeaderComponent, { ...props })), /* @__PURE__ */ import_react.default.createElement("main", { id: "pageContent-container" }, PageComponent && /* @__PURE__ */ import_react.default.createElement(PageComponent, { ...props })));
 }

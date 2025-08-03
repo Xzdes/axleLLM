@@ -30,13 +30,8 @@ __export(auth_layout_exports, {
   default: () => MainLayout
 });
 module.exports = __toCommonJS(auth_layout_exports);
-var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
 function MainLayout(props) {
   const { HeaderComponent, PageComponent } = props.components;
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { id: "layout", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: "Layout" }),
-    HeaderComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HeaderComponent, { ...props }),
-    PageComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageComponent, { ...props })
-  ] });
+  return /* @__PURE__ */ import_react.default.createElement("div", { id: "layout" }, /* @__PURE__ */ import_react.default.createElement("h1", null, "Layout"), HeaderComponent && /* @__PURE__ */ import_react.default.createElement(HeaderComponent, { ...props }), PageComponent && /* @__PURE__ */ import_react.default.createElement(PageComponent, { ...props }));
 }

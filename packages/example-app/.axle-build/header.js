@@ -30,22 +30,7 @@ __export(header_exports, {
   default: () => Header
 });
 module.exports = __toCommonJS(header_exports);
-var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
 function Header({ globals, user }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { className: "app-header", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: globals.appName || "AxleLLM App" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "user-info", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { "atom-action": "GET /action/open-docs", style: { cursor: "pointer", marginRight: "15px" }, children: "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F" }),
-      user && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
-          user.name,
-          " (",
-          user.role,
-          ")"
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { "atom-action": "GET /auth/logout", style: { cursor: "pointer" }, children: "\u0412\u044B\u0445\u043E\u0434" })
-      ] })
-    ] })
-  ] });
+  return /* @__PURE__ */ import_react.default.createElement("header", { className: "app-header" }, /* @__PURE__ */ import_react.default.createElement("h1", null, globals.appName || "AxleLLM App"), /* @__PURE__ */ import_react.default.createElement("div", { className: "user-info" }, /* @__PURE__ */ import_react.default.createElement("a", { "atom-action": "GET /action/open-docs", style: { cursor: "pointer", marginRight: "15px" } }, "\u0414\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u044F"), user && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("span", null, user.name, " (", user.role, ")"), /* @__PURE__ */ import_react.default.createElement("a", { "atom-action": "GET /auth/logout", style: { cursor: "pointer" } }, "\u0412\u044B\u0445\u043E\u0434"))));
 }

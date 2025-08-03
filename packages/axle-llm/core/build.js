@@ -33,7 +33,7 @@ async function runBuild() {
         if (entryPoints.length === 0) {
             console.log('[axle-build] No .jsx components found.');
             await fs.promises.writeFile(path.join(outDir, '.keep'), '');
-            console.log('// BUILD-COMPLETE //'); // Signal completion even if no files
+            console.log('// BUILD-COMPLETE //');
             if (!process.argv.includes('--watch')) return;
         }
 
@@ -45,9 +45,11 @@ async function runBuild() {
             bundle: false,
             platform: 'node',
             format: 'cjs',
-            jsx: 'automatic',
-            loader: { '.jsx': 'jsx' },
-            logLevel: 'silent', // We'll handle our own logging
+            // ★★★ ПРИВОДИМ В СООТВЕТСТВИЕ С ТЕСТАМИ ★★★
+            jsx: 'transform',
+            jsxFactory: 'React.createElement',
+            jsxFragment: 'React.Fragment',
+            logLevel: 'silent',
             plugins: [
                 {
                     name: 'axle-build-reporter',
@@ -60,7 +62,6 @@ async function runBuild() {
                                 const componentCount = entryPoints.length;
                                 if (isFirstBuild) {
                                     console.log(`[axle-build] ✅ Initial build complete. ${componentCount} component(s) compiled.`);
-                                    // This is the special signal for our command runner
                                     console.log('// BUILD-COMPLETE //');
                                     if (isWatchMode) {
                                        console.log('[axle-build] Watching for changes...');

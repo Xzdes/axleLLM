@@ -30,12 +30,8 @@ __export(cashier_page_exports, {
   default: () => CashierPage
 });
 module.exports = __toCommonJS(cashier_page_exports);
-var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
 function CashierPage(props) {
   const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props;
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "cashier-page-wrapper", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "positionsList-container", children: PositionsListComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PositionsListComponent, { ...props }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "receipt-container", children: ReceiptComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ReceiptComponent, { ...props }) })
-  ] });
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "cashier-page-wrapper" }, /* @__PURE__ */ import_react.default.createElement("div", { id: "positionsList-container" }, PositionsListComponent && /* @__PURE__ */ import_react.default.createElement(PositionsListComponent, { ...props })), /* @__PURE__ */ import_react.default.createElement("div", { id: "receipt-container" }, ReceiptComponent && /* @__PURE__ */ import_react.default.createElement(ReceiptComponent, { ...props })));
 }

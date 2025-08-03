@@ -1,5 +1,4 @@
-    import React from 'react';
-    
+import React from 'react';
     export default function MainLayout(props) {
         // Получаем компоненты из нового свойства `components`
         const { HeaderComponent, PageComponent } = props.components;
