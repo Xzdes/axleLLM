@@ -12,16 +12,26 @@ let appPath;
 if (isDev) {
   appPath = process.argv[2]; 
 } else {
+  // Корректное определение пути для упакованного приложения
   appPath = app.getAppPath();
+  // Если приложение упаковано в asar, реальный appPath - это директория выше
+  if (path.basename(appPath).endsWith('.asar')) {
+      appPath = path.dirname(appPath);
+  }
 }
 
 if (!appPath) {
-  console.error('[axle-main] Critical: Application path was not provided or could not be determined. Exiting.');
-  if (app && typeof app.isPackaged === 'boolean' && !app.isPackaged) {
-      dialog.showErrorBox('Critical Error', 'Application path was not provided. Exiting.');
+  const errorMsg = '[axle-main] Critical: Application path was not provided or could not be determined. Exiting.';
+  console.error(errorMsg);
+  if (app && app.isReady()) {
+      dialog.showErrorBox('Critical Error', 'Application path could not be determined. Exiting.');
   }
   process.exit(1);
 }
+
+// ★★★ ГЛАВНОЕ ИСПРАВЛЕНИЕ ★★★
+// Мы загружаем ПОЛНЫЙ манифест ОДИН раз при старте главного процесса.
+// Этот объект `manifest` теперь содержит абсолютно все, включая роуты из папки.
 const manifest = loadManifest(appPath);
 
 function setupBridge(win) {
@@ -35,29 +45,28 @@ function setupBridge(win) {
       throw new Error(`[axle-bridge] Invalid API format: ${api}`);
     }
 
-    const isAllowed = manifest.bridge?.[apiGroup]?.[apiMethod] === true;
-    if (!isAllowed) {
-      throw new Error(`[axle-bridge] API call blocked by manifest: '${api}' is not whitelisted.`);
+    const isDialogAllowed = manifest.bridge?.dialogs?.[apiMethod] === true;
+    const isShellAllowed = manifest.bridge?.shell?.[apiMethod] === true;
+    const isCustomAllowed = manifest.bridge?.custom?.[apiGroup] && typeof require(path.join(appPath, 'app', 'bridge', manifest.bridge.custom[apiGroup]))[apiMethod] === 'function';
+
+    if (!isDialogAllowed && !isShellAllowed && !isCustomAllowed) {
+      throw new Error(`[axle-bridge] API call blocked by manifest: '${api}' is not whitelisted or does not exist.`);
     }
 
     switch (apiGroup) {
       case 'dialogs':
-        switch (apiMethod) {
-          case 'showMessageBox':
-            return await dialog.showMessageBox(win, args);
-          case 'showOpenDialog':
-            return await dialog.showOpenDialog(win, args);
-          default:
-            throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group '${apiGroup}'.`);
-        }
+        return await dialog[apiMethod](win, args);
       case 'shell':
-        switch (apiMethod) {
-          case 'openExternal':
+        if(apiMethod === 'openExternal'){
             await shell.openExternal(args.url);
             return { success: true };
-          default:
-            throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group '${apiGroup}'.`);
         }
+        throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group '${apiGroup}'.`);
+      case 'custom':
+        const [_, moduleAlias, methodName] = api.split('.');
+        const modulePath = path.join(appPath, 'app', 'bridge', manifest.bridge.custom[moduleAlias]);
+        const customModule = require(modulePath);
+        return await customModule[methodName](...(args || []));
       default:
         throw new Error(`[axle-bridge] Unknown API group: '${apiGroup}'.`);
     }
@@ -100,19 +109,16 @@ async function createWindow() {
   setupBridge(win);
 
   try {
-    // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
     let dbPath;
     if (isDev) {
-      // В режиме разработки используем локальную папку, которую наполняет seed.js
       dbPath = path.join(appPath, 'axle-db-data');
     } else {
-      // В собранном приложении используем папку данных пользователя
       dbPath = path.join(app.getPath('userData'), 'axle-db-data');
     }
 
-    // Передаем вычисленный путь при создании экземпляра сервера.
+    // ★★★ И МЫ ПЕРЕДАЕМ ЭТОТ ПОЛНОСТЬЮ СОБРАННЫЙ МАНИФЕСТ НАПРЯМУЮ В СЕРВЕР ★★★
+    // Сервер больше не будет пытаться читать файлы сам, он получит готовую конфигурацию.
     const { httpServer } = await createServerInstance(appPath, manifest, { dbPath });
-    // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
     
     const port = await getPort();
     const host = '127.0.0.1';
@@ -129,6 +135,10 @@ async function createWindow() {
 
   } catch (error) {
     console.error('[axle-main] Failed to create or start internal server:', error);
+    if (app.isReady()) {
+      dialog.showErrorBox('Startup Error', `Failed to start internal server:\n\n${error.message}`);
+    }
+    app.quit();
   }
 
   if (isDev && config.devtools) {

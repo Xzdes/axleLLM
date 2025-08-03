@@ -1,5 +1,4 @@
 // packages/axle-llm/core/commands.js
-
 const path = require('path');
 const fs = require('fs');
 const electron = require('electron');
@@ -15,38 +14,27 @@ const C_YELLOW = '\x1b[33m';
 const C_CYAN = '\x1b[36m';
 const C_GREEN = '\x1b[32m';
 
-/**
- * Ищет корневую папку монорепозитория, двигаясь вверх от текущей директории.
- * @param {string} startPath - Путь, с которого начинается поиск.
- * @returns {string|null} - Путь к корню монорепозитория или null, если не найден.
- */
 function findMonorepoRoot(startPath) {
   let currentPath = startPath;
-  // Двигаемся вверх, пока не дойдем до корня диска
   while (currentPath !== path.parse(currentPath).root) {
     const pkgPath = path.join(currentPath, 'package.json');
     if (fs.existsSync(pkgPath)) {
       try {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-        // Если в package.json есть поле "workspaces", мы нашли корень.
         if (pkg.workspaces) {
           return currentPath;
         }
-      } catch (e) {
-        // Игнорируем некорректные JSON-файлы
-      }
+      } catch (e) { /* ignore */ }
     }
     currentPath = path.dirname(currentPath);
   }
-  return null; // Корень монорепозитория не найден
+  return null;
 }
-
 
 function runDev(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in DEV mode...${C_RESET}`);
   
   if (!runValidation(appPath)) {
-    console.error(`\n${C_RED}🚨 Aborting launch due to validation errors. Please fix the issues and try again.${C_RESET}`);
     process.exit(1);
   }
 
@@ -75,23 +63,18 @@ async function runPackage(appPath) {
   console.log(`${C_CYAN}[axle-cli] Packaging application...${C_RESET}`);
 
   if (!runValidation(appPath)) {
-    console.error(`\n${C_RED}🚨 Aborting packaging due to validation errors.${C_RESET}`);
     process.exit(1);
   }
   
   try {
-    // Ищем корень монорепозитория, начиная с папки приложения
     const monorepoRoot = findMonorepoRoot(appPath);
-    
-    // Определяем, где искать package.json с devDependencies
     const packageJsonPath = monorepoRoot 
-      ? path.join(monorepoRoot, 'package.json') // Если мы в монорепо, берем корневой package.json
-      : path.join(appPath, 'package.json');      // Иначе (для старых проектов), берем локальный
+      ? path.join(monorepoRoot, 'package.json')
+      : path.join(appPath, 'package.json');
 
     if (!fs.existsSync(packageJsonPath)) {
         throw new Error(`Could not find package.json at ${packageJsonPath}`);
     }
-
     console.log(`${C_CYAN}[axle-cli] Using config from: ${packageJsonPath}${C_RESET}`);
 
     const appPackageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
@@ -100,16 +83,12 @@ async function runPackage(appPath) {
     if (!electronVersion) {
       throw new Error(`'electron' version not found in devDependencies of ${packageJsonPath}`);
     }
-    
     console.log(`${C_CYAN}[axle-cli] Using Electron version: ${electronVersion}${C_RESET}`);
     
-    // Собираем мы все равно папку приложения (`appPath`), а не корень монорепо
     const result = await builder.build({
       projectDir: appPath,
       config: {
-        "directories": {
-          "output": path.join(appPath, "dist")
-        },
+        "directories": { "output": path.join(appPath, "dist") },
         "electronVersion": electronVersion
       }
     });
@@ -147,6 +126,7 @@ function runValidation(appPath) {
     });
     
     if (issues.some(i => i.level === 'error')) {
+        console.error(`\n${C_RED}🚨 Aborting launch due to validation errors. Please fix the issues and try again.${C_RESET}`);
         return false;
     }
     
