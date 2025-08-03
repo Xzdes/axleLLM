@@ -1,13 +1,11 @@
 // packages/axle-llm/core/validator/check-components.js
-// Этот модуль отвечает за валидацию секции `components` в манифесте.
-
 const path = require('path');
 const { addIssue, checkFileExists } = require('./utils');
 
 /**
- * Проверяет все компоненты, объявленные в манифесте.
- * @param {object} manifest - Полный объект манифеста.
- * @param {string} appPath - Абсолютный путь к приложению пользователя.
+ * Validates the 'components' section of the manifest for a React-based project.
+ * @param {object} manifest - The full manifest object.
+ * @param {string} appPath - The absolute path to the user's application.
  */
 function validateComponents(manifest, appPath) {
   const components = manifest.components || {};
@@ -17,43 +15,23 @@ function validateComponents(manifest, appPath) {
     const config = components[name];
     const category = `Component '${name}'`;
 
-    let templateFilename;
-    let styleFilename;
+    // In our new React engine, the component definition is just the object.
+    // The key 'name' corresponds to the file name.
+    const templateFilename = `${name}.jsx`;
+    const templatePath = path.join(componentsDir, templateFilename);
 
-    // --- Шаг 1: Определяем, в каком формате задан компонент (строка или объект) ---
+    // 1. Check if the .jsx file exists.
+    checkFileExists(templatePath, category, `component source file '${templateFilename}'`);
 
-    if (typeof config === 'string') {
-      // Простой формат: "myComponent": "my-template.html"
-      templateFilename = config;
-    } else if (typeof config === 'object' && config !== null && config.template) {
-      // Комплексный формат: "myComponent": { template: "...", style: "..." }
-      templateFilename = config.template;
-      styleFilename = config.style;
-    } else {
-      // Неверный формат.
-      addIssue(
-        'error',
-        category,
-        `Invalid component definition.`,
-        `Definition must be a string (template path) or an object with a 'template' property.`
-      );
-      continue; // Переходим к следующему компоненту.
-    }
-
-    // --- Шаг 2: Проверяем, что файлы, указанные в конфигурации, существуют ---
-
-    // Проверяем существование файла шаблона (обязательно).
-    if (templateFilename) {
-      const templatePath = path.join(componentsDir, templateFilename);
-      checkFileExists(templatePath, category, `template file '${templateFilename}'`);
-    } else {
-      addIssue('error', category, `Component definition is missing a template file path.`);
-    }
-
-    // Проверяем существование файла стилей (необязательно).
-    if (styleFilename) {
-      const stylePath = path.join(componentsDir, styleFilename);
-      checkFileExists(stylePath, category, `style file '${styleFilename}'`);
+    // 2. Check if a style file is specified and if it exists.
+    if (typeof config === 'object' && config.style) {
+      const styleFilename = config.style;
+      if (typeof styleFilename === 'string') {
+        const stylePath = path.join(componentsDir, styleFilename);
+        checkFileExists(stylePath, category, `style file '${styleFilename}'`);
+      } else {
+        addIssue('error', category, `The 'style' property must be a string path to a CSS file.`);
+      }
     }
   }
 }
