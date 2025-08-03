@@ -7,15 +7,19 @@
 >
     <h3>Чек</h3>
     
-    <!-- ★ ИСПРАВЛЕНИЕ: Правильный класс для сообщения -->
     <p class="status-message" atom-if="data.receipt.statusMessage">
       {{ data.receipt.statusMessage }}
     </p>
 
-    <!-- ★ ИСПРАВЛЕНИЕ: Блок Mustache должен содержать только один <ul> -->
+    <!-- 
+      Этот блок будет отрендерен, ТОЛЬКО ЕСЛИ массив data.receipt.items НЕ пустой
+    -->
     {{#data.receipt.items}}
     <ul class="receipt-items">
-        {{#.}}
+        <!-- 
+          Mustache автоматически перебирает массив.
+          Внутри этого блока мы находимся в контексте одного товара.
+        -->
         <li>
             <span>{{name}} ({{price}}р x {{quantity}})</span>
             <button 
@@ -27,10 +31,12 @@
               value="{{id}}"
             >×</button>
         </li>
-        {{/.}}
     </ul>
     {{/data.receipt.items}}
 
+    <!-- 
+      Этот блок (инвертированная секция) будет отрендерен, ТОЛЬКО ЕСЛИ массив data.receipt.items ПУСТОЙ
+    -->
     {{^data.receipt.items}}
     <div class="empty-state">
       <p>Чек пуст</p>
@@ -71,7 +77,6 @@
       Показать инфо (Тест Моста)
     </button>
 
-    <!-- ★★★ НОВАЯ КНОПКА ★★★ -->
     <button 
       type="button"
       class="action-button"
@@ -80,6 +85,7 @@
     >
       Прикрепить файл...
     </button>
+
    <button 
       type="button"
       class="action-button"

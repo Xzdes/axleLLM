@@ -1,48 +1,28 @@
-// Этот файл содержит класс AssetLoader.
-// Его задача — при старте приложения загрузить все файловые ассеты
-// (HTML-шаблоны, CSS-стили, JS-скрипты для `run`-шагов) в оперативную память.
-// Это позволяет избежать медленных операций чтения с диска при обработке каждого запроса.
-
+// packages/axle-llm/core/asset-loader.js
 const fs = require('fs');
 const path = require('path');
+const posthtml = require('posthtml');
 
 class AssetLoader {
-  /**
-   * @param {string} appPath - Абсолютный путь к приложению пользователя.
-   * @param {object} manifest - Загруженный объект манифеста.
-   */
   constructor(appPath, manifest) {
     this.appPath = appPath;
     this.manifest = manifest;
     
-    // Хранилища для кэшированного содержимого.
-    this.components = {}; // Для { template, style }
-    this.actions = {};    // Для модулей из app/actions/
-    // ★★★ НОВОЕ ХРАНИЛИЩЕ ДЛЯ МОДУЛЕЙ МОСТА ★★★
-    this.bridgeModules = {}; // Для модулей из app/bridge/
+    this.components = {};
+    this.actions = {};
+    this.bridgeModules = {};
 
-    // Запускаем загрузку всех ассетов прямо в конструкторе.
     this.loadAll();
   }
 
-  /**
-   * Сканирует манифест и папки проекта, загружая все необходимые файлы.
-   */
   loadAll() {
     console.log('[AssetLoader] Caching all application assets...');
-    
     this._loadComponents();
     this._loadActions();
-    // ★★★ ЗАПУСКАЕМ ЗАГРУЗКУ МОДУЛЕЙ МОСТА ★★★
     this._loadBridgeModules();
-    
     console.log('[AssetLoader] Asset caching complete.');
   }
 
-  /**
-   * Загружает все UI-компоненты (HTML и CSS).
-   * @private
-   */
   _loadComponents() {
     const componentsConfig = this.manifest.components || {};
     const componentsDir = path.join(this.appPath, 'app', 'components');
@@ -51,46 +31,73 @@ class AssetLoader {
       const config = componentsConfig[name];
       const componentData = { template: null, style: null };
 
-      let templatePath;
-      let stylePath;
+      let templateFilename, styleFilename;
 
       if (typeof config === 'string') {
-        templatePath = path.join(componentsDir, config);
+        templateFilename = config;
       } else if (typeof config === 'object' && config.template) {
-        templatePath = path.join(componentsDir, config.template);
-        if (config.style) {
-          stylePath = path.join(componentsDir, config.style);
-        }
+        templateFilename = config.template;
+        styleFilename = config.style;
+      } else {
+        console.warn(`[AssetLoader] WARN: Invalid component definition for '${name}'. Skipping.`);
+        continue;
       }
+      
+      const templatePath = path.join(componentsDir, templateFilename);
+      let htmlContent;
 
       try {
-        componentData.template = fs.readFileSync(templatePath, 'utf-8');
+        htmlContent = fs.readFileSync(templatePath, 'utf-8');
       } catch (error) {
         throw new Error(`[AssetLoader] CRITICAL: Template file not found for component '${name}' at path: ${templatePath}`);
       }
       
-      if (stylePath) {
+      let extractedStyle = '';
+      
+      // Создаем плагин, который использует правильный метод tree.walk()
+      const styleExtractorPlugin = (tree) => {
+        // tree.walk() проходит по каждому узлу в HTML-дереве
+        tree.walk((node) => {
+          // Если узел существует и является тегом <style>
+          if (node && node.tag === 'style') {
+            // Мы забираем его содержимое
+            extractedStyle += (node.content || []).join('').trim();
+            // И "удаляем" узел из дерева, чтобы он не попал в финальный HTML-шаблон
+            node.tag = false; // Эффективный способ удалить тег
+            node.content = null;
+          }
+          return node; // Возвращаем узел (измененный или нет)
+        });
+        return tree;
+      };
+
+      // Синхронно обрабатываем HTML, применяя наш плагин
+      const result = posthtml([styleExtractorPlugin]).process(htmlContent, { sync: true });
+      
+      // result.html теперь содержит HTML БЕЗ тегов <style>
+      componentData.template = result.html;
+
+      // Логика определения, какой стиль использовать:
+      if (styleFilename && styleFilename !== templateFilename) {
+        // 1. Если указан отдельный .css файл, используем его
+        const stylePath = path.join(componentsDir, styleFilename);
         try {
           componentData.style = fs.readFileSync(stylePath, 'utf-8');
         } catch (error) {
-          console.warn(`[AssetLoader] WARN: Style file not found for component '${name}' at path: ${stylePath}. Component will work without styles.`);
+          console.warn(`[AssetLoader] WARN: Style file not found for component '${name}' at path: ${stylePath}.`);
         }
+      } else if (extractedStyle) {
+        // 2. Иначе, если мы извлекли стили из <style>, используем их
+        componentData.style = extractedStyle;
       }
       
       this.components[name] = componentData;
     }
   }
 
-  /**
-   * Загружает все JS-скрипты для `run`-шагов из папки `app/actions/`.
-   * @private
-   */
   _loadActions() {
     const actionsDir = path.join(this.appPath, 'app', 'actions');
-    
-    if (!fs.existsSync(actionsDir)) {
-      return;
-    }
+    if (!fs.existsSync(actionsDir)) return;
     
     fs.readdirSync(actionsDir).forEach(file => {
       if (file.endsWith('.js')) {
@@ -106,58 +113,32 @@ class AssetLoader {
     });
   }
 
-  // ★★★ НАЧАЛО НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
-  /**
-   * Загружает все кастомные JS-модули для серверного моста из `app/bridge/`.
-   * @private
-   */
   _loadBridgeModules() {
     const bridgeConfig = this.manifest.bridge?.custom || {};
     const bridgeDir = path.join(this.appPath, 'app', 'bridge');
 
-    if (Object.keys(bridgeConfig).length === 0 || !fs.existsSync(bridgeDir)) {
-      return;
-    }
+    if (Object.keys(bridgeConfig).length === 0 || !fs.existsSync(bridgeDir)) return;
 
     for (const moduleName in bridgeConfig) {
       const fileName = bridgeConfig[moduleName];
       const modulePath = path.join(bridgeDir, fileName);
       try {
-        // Мы также очищаем кэш для поддержки hot-reload
         delete require.cache[require.resolve(modulePath)];
         this.bridgeModules[moduleName] = require(modulePath);
-        console.log(`[AssetLoader] -> Cached bridge module '${moduleName}' from ${fileName}`);
       } catch (error) {
         throw new Error(`[AssetLoader] CRITICAL: Failed to load bridge module '${moduleName}' from ${modulePath}. Error: ${error.message}`);
       }
     }
   }
-  // ★★★ КОНЕЦ НОВОЙ ФУНКЦИОНАЛЬНОСТИ ★★★
 
-  /**
-   * Возвращает кэшированные данные компонента.
-   * @param {string} name - Имя компонента.
-   * @returns {{template: string, style: string|null}|undefined}
-   */
   getComponent(name) {
     return this.components[name];
   }
 
-  /**
-   * Возвращает кэшированный модуль действия.
-   * @param {string} name - Имя действия (имя файла без .js).
-   * @returns {function|undefined}
-   */
   getAction(name) {
     return this.actions[name];
   }
 
-  // ★★★ НОВЫЙ МЕТОД-ГЕТТЕР ★★★
-  /**
-   * Возвращает кэшированный модуль моста.
-   * @param {string} name - Имя модуля из манифеста.
-   * @returns {object|undefined}
-   */
   getBridgeModule(name) {
     return this.bridgeModules[name];
   }
