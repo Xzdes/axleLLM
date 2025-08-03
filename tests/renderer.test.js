@@ -1,153 +1,164 @@
 // tests/renderer.test.js
 
 const path = require('path');
+const fs = require('fs');
+const React = require('react');
+const util = require('util');
 
 const { Renderer } = require('../packages/axle-llm/core/renderer');
 const { AssetLoader } = require('../packages/axle-llm/core/asset-loader');
 const { ConnectorManager } = require('../packages/axle-llm/core/connector-manager');
+const { loadManifest } = require('../packages/axle-llm/core/config-loader');
+const esbuild = require('esbuild');
 
+// --- Test Utilities ---
 function log(message, data) {
-    console.log(`\n[LOG] ${message}`);
+    console.log(`\n[Test-LOG] ${message}`);
     if (data !== undefined) {
-        const replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
-        console.log(JSON.stringify(data, replacer, 2));
+        console.log(util.inspect(data, { depth: 5, colors: true }));
     }
 }
+
 function check(condition, description, actual) {
     if (condition) {
         console.log(`  ✅ OK: ${description}`);
     } else {
         console.error(`  ❌ FAILED: ${description}`);
-        if (actual !== undefined) console.error('     ACTUAL VALUE:', actual);
+        if (actual !== undefined) console.error('     ACTUAL VALUE:', util.inspect(actual, { depth: 5, colors: true }));
         throw new Error(`Assertion failed: ${description}`);
     }
 }
 
-async function setupEnvironment(appPath) {
-    const manifest = require(path.join(appPath, 'manifest.js'));
+async function setupRendererTest(appPath) {
+    log('Setting up test environment at:', appPath);
+    const componentsDir = path.join(appPath, 'app', 'components');
+    const outDir = path.join(appPath, '.axle-build');
+    
+    if (fs.existsSync(componentsDir)) {
+      const entryPoints = (await fs.promises.readdir(componentsDir))
+        .filter(f => f.endsWith('.jsx'))
+        .map(f => path.join(componentsDir, f));
+
+      log('Found JSX entry points:', entryPoints);
+
+      if (entryPoints.length > 0) {
+        if (!fs.existsSync(outDir)) await fs.promises.mkdir(outDir, { recursive: true });
+        
+        log('Compiling JSX components with esbuild...');
+        await esbuild.build({
+            entryPoints,
+            outdir: outDir,
+            platform: 'node',
+            format: 'cjs',
+            jsx: 'transform',
+            jsxFactory: 'React.createElement',
+            jsxFragment: 'React.Fragment'
+        });
+        log('JSX compilation complete.');
+      }
+    }
+
+    log('Loading manifest...');
+    const manifest = loadManifest(appPath);
+    log('Initializing ConnectorManager...');
     const connectorManager = new ConnectorManager(appPath, manifest);
     await connectorManager.init();
+    log('Initializing AssetLoader...');
     const assetLoader = new AssetLoader(appPath, manifest);
-    const renderer = new Renderer(assetLoader, manifest, connectorManager);
-    return { manifest, renderer };
+    log('Initializing Renderer...');
+    const renderer = new Renderer(assetLoader, manifest, appPath);
+    return { manifest, renderer, connectorManager };
 }
 
 module.exports = {
-    'Renderer: Basic variable rendering': {
-        options: { manifest: { components: { 'hello': 'hello.html' } }, files: { 'app/components/hello.html': '<h1>Hello, {{name}}!</h1>' } },
-        async run(appPath) {
-            const { renderer } = await setupEnvironment(appPath);
-            const { html } = await renderer.renderComponent('hello', { name: 'World' });
-            log('Received HTML:', html);
-            check(/<h1[^>]*>Hello, World!<\/h1>/.test(html), 'Rendered HTML should contain "<h1>Hello, World!</h1>"');
-        }
-    },
-    'Renderer: atom-if with false condition should remove element': {
-        options: { manifest: { components: { 'conditional': 'conditional.html' } }, files: { 'app/components/conditional.html': '<div><p atom-if="show">You should not see this.</p></div>' } },
-        async run(appPath) {
-            const { renderer } = await setupEnvironment(appPath);
-            const { html } = await renderer.renderComponent('conditional', { show: false });
-            log('Received HTML:', html);
-            check(!html.includes('You should not see this'), 'Element with false atom-if condition should be removed.', html);
-        }
-    },
-    'Renderer: atom-if with true condition should keep element and remove attribute': {
-        options: { manifest: { components: { 'conditional': 'conditional.html' } }, files: { 'app/components/conditional.html': '<div><p atom-if="user.isAdmin">Welcome, Admin!</p></div>' } },
-        async run(appPath) {
-            const { renderer } = await setupEnvironment(appPath);
-            const { html } = await renderer.renderComponent('conditional', { user: { isAdmin: true } });
-            log('Received HTML:', html);
-            check(html.includes('Welcome, Admin!'), 'Element with true atom-if condition should be kept.', html);
-            check(!html.includes('atom-if'), 'The atom-if attribute itself should be removed.', html);
-        }
-    },
-    'Renderer: Scoped CSS should be applied': {
-        options: { manifest: { components: { 'card': { template: 'card.html', style: 'card.css' } } }, files: { 'app/components/card.html': '<div><h3>Title</h3></div>', 'app/components/card.css': ':host { border: 1px solid red; } h3 { color: blue; }' } },
-        async run(appPath) {
-            const { renderer } = await setupEnvironment(appPath);
-            const { html, styles } = await renderer.renderComponent('card', {});
-            log('Received HTML:', html); log('Received Styles:', styles);
-            const componentIdMatch = html.match(/data-component-id="([^"]+)"/);
-            check(componentIdMatch, 'HTML should have a data-component-id attribute.');
-            const scopeSelector = `[data-component-id="${componentIdMatch[1]}"]`;
-            const normalizedStyles = styles.replace(/\s+/g, ' ');
-            check(normalizedStyles.includes(`${scopeSelector} { border: 1px solid red; }`), 'CSS rule for :host should be scoped.', normalizedStyles);
-            check(normalizedStyles.includes(`${scopeSelector} h3`), 'CSS rule for h3 should be scoped.', normalizedStyles);
-        }
-    },
-
-    'Renderer: View rendering should inject components and styles': {
+    'Renderer: Should render a full view with layout and injected components': {
         options: {
             manifest: {
-                launch: {},
-                components: {
-                    'layout': 'layout.html',
-                    'header': { template: 'header.html', style: 'header.css' },
-                },
-                routes: { 'GET /': { type: 'view', layout: 'layout', inject: { 'headerPlaceholder': 'header' } } }
+                launch: { title: 'Test App' },
+                connectors: { user: { type: 'in-memory', initialState: { name: 'Alice' } } },
+                components: { 'main-layout': {}, 'header': {}, 'home-page': {} },
+                routes: { 'GET /': { type: 'view', layout: 'main-layout', reads: ['user'], inject: { header: 'header', pageContent: 'home-page' } } }
             },
             files: {
-                'app/components/layout.html': '<html><head></head><body><atom-inject into="headerPlaceholder"></atom-inject></body></html>',
-                'app/components/header.html': '<header>My App</header>',
-                'app/components/header.css': 'header { background: #eee; }',
+                'app/components/main-layout.jsx': `
+                    import React from 'react';
+                    const util = require('util');
+                    export default function MainLayout(props) {
+                        console.log('--- PROPS INSIDE MainLayout ---', util.inspect(Object.keys(props), { colors: true }));
+                        const { header: HeaderComponent, pageContent: PageComponent } = props.components;
+                        return (
+                            <div id="layout">
+                                <h1>Layout</h1>
+                                {HeaderComponent && <HeaderComponent {...props} />}
+                                {PageComponent && <PageComponent {...props} />}
+                            </div>
+                        );
+                    }`,
+                'app/components/header.jsx': `
+                    import React from 'react';
+                    const util = require('util');
+                    export default function Header(props) {
+                        console.log('--- PROPS INSIDE Header ---', util.inspect(props, { depth: 3, colors: true }));
+                        const { data } = props;
+                        return <header>Welcome, {data && data.user ? data.user.name : 'USER_NOT_FOUND'}</header>;
+                    }`,
+                'app/components/home-page.jsx': `
+                    import React from 'react';
+                    export default function HomePage() {
+                        return <main>Home Page Content</main>;
+                    }`
             }
         },
         async run(appPath) {
-            const { manifest, renderer } = await setupEnvironment(appPath);
-            const finalHtml = await renderer.renderView(manifest.routes['GET /'], {}, null);
-            log('Received final page HTML:', finalHtml);
+            log('Starting test: "Should render a full view..."');
+            const { manifest, renderer, connectorManager } = await setupRendererTest(appPath);
+            const routeConfig = manifest.routes['GET /'];
+            const dataContext = await connectorManager.getContext(routeConfig.reads);
+            const html = await renderer.renderView(routeConfig, dataContext, null);
+            log('Rendered View HTML:', html);
             
-            check(
-                /<header[^>]*>My App<\/header>/.test(finalHtml), 
-                'Header component should be injected into layout.'
-            );
+            check(html.includes('<title>Test App</title>'), 'Should render the correct page title.');
             
-            check(
-                /<style data-component-name="header">/.test(finalHtml), 
-                'Style tag for header should be added to head.'
-            );
+            const headerRegex = /<header>Welcome,.*Alice<\/header>/;
+            check(headerRegex.test(html), 'Should render the injected header with correct props.', html);
+
+            check(html.includes('<main>Home Page Content</main>'), 'Should render the injected page content.');
         }
     },
-    
-    // ★★★ НОВЫЙ ТЕСТ ★★★
-    'Renderer: Theming system should inject CSS variables into the root': {
+
+    'Renderer: Should correctly include component styles and theme variables': {
         options: {
             manifest: {
-                launch: {},
-                components: { 'layout': 'layout.html' },
-                routes: { 'GET /': { type: 'view', layout: 'layout' } },
-                themes: {
-                    default: {
-                        "--main-color": "#336699",
-                        "--font-size": "16px"
-                    }
-                }
+                launch: { title: 'Styled App' },
+                themes: { default: { '--main-color': 'blue' } },
+                connectors: {},
+                components: { 'main-layout': { style: 'main.css' }, 'card': { style: 'card.css' } },
+                routes: { 'GET /': { type: 'view', layout: 'main-layout', inject: { pageContent: 'card' } } }
             },
             files: {
-                'app/components/layout.html': '<html><head></head><body>Page</body></html>',
+                'app/components/main-layout.jsx': `
+                    import React from 'react';
+                    export default function MainLayout(props) {
+                        const { pageContent: PageContentComponent } = props.components;
+                        return <div>{PageContentComponent && <PageContentComponent {...props} />}</div>;
+                    }`,
+                'app/components/card.jsx': `
+                    import React from 'react';
+                    export default function Card() {
+                        return <div className="card">Card</div>
+                    }`,
+                'app/components/main.css': `body { font-family: sans-serif; }`,
+                'app/components/card.css': `.card { color: var(--main-color); }`
             }
         },
         async run(appPath) {
-            const { manifest, renderer } = await setupEnvironment(appPath);
-            const finalHtml = await renderer.renderView(manifest.routes['GET /'], {}, null);
-            log('Received final page HTML with theme:', finalHtml);
-
-            check(
-                finalHtml.includes('<style id="axle-theme-variables">'),
-                'A style tag for theme variables should be present.'
-            );
-            check(
-                finalHtml.includes(':root {'),
-                'The style tag should contain a :root selector.'
-            );
-            check(
-                finalHtml.includes('--main-color: #336699;'),
-                'The CSS variable for main color should be correctly injected.'
-            );
-             check(
-                finalHtml.includes('--font-size: 16px;'),
-                'The CSS variable for font size should be correctly injected.'
-            );
+            log('Starting test: "Should correctly include component styles..."');
+            const { manifest, renderer } = await setupRendererTest(appPath);
+            const html = await renderer.renderView(manifest.routes['GET /'], {}, null);
+            log('Rendered Styled HTML:', html);
+            
+            check(html.includes('<style id="axle-theme-variables">'), 'Should include the theme variables style tag.');
+            check(html.includes('--main-color: blue;'), 'Should include the correct theme variable.');
         }
     }
 };

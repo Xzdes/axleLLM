@@ -1,17 +1,13 @@
-// packages/example-app/app/components/auth-layout.jsx
-import React from 'react';
-
-/**
- * A layout component that provides a centered card for authentication forms.
- * @param {object} props
- * @param {React.ReactNode} props.formContent - The actual form component (e.g., LoginForm).
- */
-export default function AuthLayout({ formContent }) {
-  return (
-    <div className="auth-page-wrapper">
-      <div className="auth-card">
-        {formContent}
-      </div>
-    </div>
-  );
-}
+    import React from 'react';
+    
+    export default function MainLayout(props) {
+        // Получаем компоненты из нового свойства `components`
+        const { HeaderComponent, PageComponent } = props.components;
+        return (
+            <div id="layout">
+                <h1>Layout</h1>
+                {HeaderComponent && <HeaderComponent {...props} />}
+                {PageComponent && <PageComponent {...props} />}
+            </div>
+        );
+    }

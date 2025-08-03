@@ -1,21 +1,20 @@
 // packages/example-app/app/components/main-layout.jsx
 import React from 'react';
 
-/**
- * The main layout component for the application.
- * It receives other rendered components as props from the renderer.
- * @param {object} props
- * @param {React.ReactNode} props.header - The header component.
- * @param {React.ReactNode} props.pageContent - The main page content component.
- */
-export default function MainLayout({ header, pageContent }) {
+// ПРИНИМАЕМ ВСЕ PROPS, А НЕ ТОЛЬКО header И pageContent
+export default function MainLayout(props) {
+  // Получаем ТИПЫ компонентов из props
+  const { header: HeaderComponent, pageContent: PageComponent } = props;
+
   return (
     <>
       <div id="header-container">
-        {header}
+        {/* Создаем элемент из типа, передавая ему ВСЕ props */}
+        {HeaderComponent && <HeaderComponent {...props} />}
       </div>
       <main id="pageContent-container">
-        {pageContent}
+        {/* Создаем элемент из типа, передавая ему ВСЕ props */}
+        {PageComponent && <PageComponent {...props} />}
       </main>
     </>
   );

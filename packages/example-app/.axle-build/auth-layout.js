@@ -27,11 +27,16 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var auth_layout_exports = {};
 __export(auth_layout_exports, {
-  default: () => AuthLayout
+  default: () => MainLayout
 });
 module.exports = __toCommonJS(auth_layout_exports);
 var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
-function AuthLayout({ formContent }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "auth-page-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "auth-card", children: formContent }) });
+function MainLayout(props) {
+  const { HeaderComponent, PageComponent } = props.components;
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { id: "layout", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", { children: "Layout" }),
+    HeaderComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HeaderComponent, { ...props }),
+    PageComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageComponent, { ...props })
+  ] });
 }

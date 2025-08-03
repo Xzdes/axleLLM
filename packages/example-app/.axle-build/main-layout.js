@@ -32,9 +32,10 @@ __export(main_layout_exports, {
 module.exports = __toCommonJS(main_layout_exports);
 var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
-function MainLayout({ header, pageContent }) {
+function MainLayout(props) {
+  const { header: HeaderComponent, pageContent: PageComponent } = props;
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "header-container", children: header }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("main", { id: "pageContent-container", children: pageContent })
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "header-container", children: HeaderComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HeaderComponent, { ...props }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("main", { id: "pageContent-container", children: PageComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageComponent, { ...props }) })
   ] });
 }

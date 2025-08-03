@@ -1,21 +1,19 @@
 // packages/example-app/app/components/cashier-page.jsx
 import React from 'react';
 
-/**
- * The main page for the cashier.
- * This component acts as a layout container for the positions list and the receipt.
- * @param {object} props
- * @param {React.ReactNode} props.positionsList - The PositionsList component.
- * @param {React.ReactNode} props.receipt - The Receipt component.
- */
-export default function CashierPage({ positionsList, receipt }) {
+export default function CashierPage(props) {
+  // Получаем ТИПЫ компонентов
+  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props;
+
   return (
     <div className="cashier-page-wrapper">
       <div id="positionsList-container">
-        {positionsList}
+        {/* Создаем элемент из типа, передавая ему ВСЕ props */}
+        {PositionsListComponent && <PositionsListComponent {...props} />}
       </div>
       <div id="receipt-container">
-        {receipt}
+        {/* Создаем элемент из типа, передавая ему ВСЕ props */}
+        {ReceiptComponent && <ReceiptComponent {...props} />}
       </div>
     </div>
   );

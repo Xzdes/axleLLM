@@ -1,24 +1,16 @@
 // packages/example-app/manifest/routes/cashier.routes.js
-// Этот модуль содержит всю основную бизнес-логику приложения кассы.
-
 module.exports = {
   // --- ГЛАВНЫЙ VIEW-РОУТ ПРИЛОЖЕНИЯ ---
-
-  /**
-   * Отображает главный экран кассира после успешного входа.
-   */
   "GET /": {
     "type": "view",
-    "layout": "mainLayout",
-    // Загружаем все необходимые данные для отображения страницы
+    "layout": "main-layout", // БЫЛО: mainLayout
     "reads": ["user", "receipt", "positions", "viewState"],
     "inject": {
       "header": "header",
-      "pageContent": "cashierPage",
-      "positionsList": "positionsList",
+      "pageContent": "cashier-page",    // БЫЛО: cashierPage
+      "positionsList": "positions-list",// БЫЛО: positionsList
       "receipt": "receipt"
     },
-    // Этот роут требует авторизации. Если пользователь не вошел, его перенаправит на /login.
     "auth": { "required": true, "failureRedirect": "/login" }
   },
 
@@ -33,13 +25,9 @@ module.exports = {
     "type": "action",
     "internal": true,
     "steps": [
-      // 1. Посчитать общее количество товаров в чеке
       { "set": "data.receipt.itemCount", "to": "data.receipt.items.reduce((sum, item) => sum + (item.quantity || 0), 0)" },
-      // 2. Вызвать внешнюю "чистую" функцию для подсчета суммы без скидки
       { "run:set": "data.receipt.total", "handler": "calculateTotal", "with": "[data.receipt.items]" },
-      // 3. Вызвать другую функцию для расчета финальной суммы с учетом скидки
       { "run:set": "context.finalCalc", "handler": "calculateFinalTotal", "with": "[data.receipt.total, data.receipt.discountPercent]" },
-      // 4. Обновить поля в коннекторе `receipt` результатами вычислений
       { "set": "data.receipt.discount", "to": "context.finalCalc.discount" },
       { "set": "data.receipt.finalTotal", "to": "context.finalCalc.finalTotal" }
     ]
@@ -50,12 +38,13 @@ module.exports = {
   /**
    * Добавляет товар в чек.
    */
-  "POST /action/addItem": {
+ "POST /action/addItem": {
     "type": "action",
     "reads": ["positions", "receipt"],
     "writes": ["receipt"],
-    "update": "receipt", // После выполнения перерисовать компонент "receipt"
+    "update": "receipt", 
     "steps": [
+      // ... (логика без изменений)
       { "set": "context.productToAdd", "to": "data.positions.items.find(p => p.id == body.id)" },
       { "set": "context.itemInReceipt", "to": "data.receipt.items.find(i => i.id == body.id)" },
       { "if": "context.itemInReceipt",
@@ -65,8 +54,8 @@ module.exports = {
           { "set": "data.receipt.items", "to": "data.receipt.items.concat([context.productToAdd])" }
         ]
       },
-      { "set": "data.receipt.statusMessage", "to": "''" }, // Сбросить статусное сообщение
-      { "action:run": { "name": "recalculateReceiptLogic" } } // Вызвать пересчет чека
+      { "set": "data.receipt.statusMessage", "to": "''" },
+      { "action:run": { "name": "recalculateReceiptLogic" } }
     ]
   },
 
@@ -109,10 +98,8 @@ module.exports = {
     "writes": ["receipt"],
     "update": "receipt",
     "steps": [
-      // По умолчанию считаем, что купон неверный
       { "set": "data.receipt.statusMessage", "to": "'Неверный купон!'" },
       { "set": "data.receipt.discountPercent", "to": "0" },
-      // Если код купона верный, применяем скидку
       { "if": "body.coupon_code === 'SALE15'", "then": [
           { "set": "data.receipt.discountPercent", "to": 15 },
           { "set": "data.receipt.statusMessage", "to": "'Купон SALE15 применен!'" }
@@ -128,8 +115,7 @@ module.exports = {
     "type": "action",
     "reads": ["positions", "viewState"],
     "writes": ["viewState"],
-    "update": "positionsList",
-    // Вся логика фильтрации вынесена в отдельный JS-файл для чистоты
+    "update": "positions-list", // БЫЛО: positionsList
     "steps": [{ "run": "filterPositions" }]
   },
 

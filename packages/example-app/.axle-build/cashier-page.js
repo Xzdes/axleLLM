@@ -32,9 +32,10 @@ __export(cashier_page_exports, {
 module.exports = __toCommonJS(cashier_page_exports);
 var import_jsx_runtime = require("react/jsx-runtime");
 var import_react = __toESM(require("react"));
-function CashierPage({ positionsList, receipt }) {
+function CashierPage(props) {
+  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props;
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "cashier-page-wrapper", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "positionsList-container", children: positionsList }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "receipt-container", children: receipt })
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "positionsList-container", children: PositionsListComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PositionsListComponent, { ...props }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { id: "receipt-container", children: ReceiptComponent && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ReceiptComponent, { ...props }) })
   ] });
 }
