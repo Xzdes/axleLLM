@@ -1,0 +1,15 @@
+/* packages/example-app/app/components/cashier-page.css */
+
+.cashier-page-wrapper {
+    display: grid;
+    grid-template-columns: 1fr minmax(400px, 0.5fr);
+    width: 100%;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+@media (max-width: 900px) {
+    .cashier-page-wrapper {
+        grid-template-columns: 1fr;
+    }
+}

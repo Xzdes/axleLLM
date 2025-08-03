@@ -1,8 +1,7 @@
 // packages/axle-llm/core/request-handler.js
-const { URL, URLSearchParams } = require('url');
+const { URL } = require('url');
 const path = require('path');
 const fs = require('fs');
-const cookie = require('cookie');
 const { ActionEngine } = require('./action-engine');
 const { AuthEngine } = require('./auth-engine');
 
@@ -31,75 +30,38 @@ class RequestHandler {
   async handle(req, res) {
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
-      const isSpaRequest = req.headers['x-requested-with'] === 'axleLLM-SPA';
       
-      if (url.pathname === '/engine-client.js') {
-        const clientScriptPath = path.resolve(__dirname, '..', 'client', 'engine-client.js');
-        const scriptContent = fs.readFileSync(clientScriptPath, 'utf-8');
-        this._sendResponse(res, 200, scriptContent, 'application/javascript');
+      // NEW: Generic static file handling for the client bundle.
+      // We assume esbuild places the output in a `/public` directory in the user's app.
+      if (url.pathname === '/public/bundle.js') {
+        const bundlePath = path.join(this.appPath, 'public', 'bundle.js');
+        try {
+          const scriptContent = fs.readFileSync(bundlePath, 'utf-8');
+          this._sendResponse(res, 200, scriptContent, 'application/javascript');
+        } catch (e) {
+            console.error(`[RequestHandler] Could not find client bundle at ${bundlePath}`);
+            this._sendResponse(res, 404, 'Client bundle not found.');
+        }
         return;
       }
 
       const routeConfig = this._findRoute(req.method, url.pathname);
-      if (!routeConfig) { return this._sendResponse(res, 404, 'Not Found'); }
+      if (!routeConfig) { 
+        return this._sendResponse(res, 404, 'Not Found'); 
+      }
       
       const user = this.authEngine ? await this.authEngine.getUserFromRequest(req) : null;
       
       if (routeConfig.auth?.required && !user) {
         const redirectUrl = routeConfig.auth.failureRedirect || '/login';
-        if (routeConfig.type === 'action' || isSpaRequest) {
-          this._sendResponse(res, 200, { redirect: redirectUrl }, 'application/json');
-        } else {
-          this.authEngine.redirect(res, redirectUrl);
-        }
+        this._sendResponse(res, 200, { redirect: redirectUrl }, 'application/json');
         return;
       }
       
       if (routeConfig.type === 'view') {
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
-        const renderContext = { data: dataContext, user, globals: this.manifest.globals, url: this.renderer._getUrlContext(url) };
-
-        if (isSpaRequest) {
-            const spaPayload = {
-                title: this.manifest.launch.title,
-                styles: [],
-                injectedParts: {},
-                bodyClass: renderContext.user ? 'app-mode' : 'auth-mode'
-            };
-    
-            const styleMap = new Map();
-    
-            for (const placeholder in routeConfig.inject) {
-                const componentToInject = routeConfig.inject[placeholder];
-                if (!componentToInject) continue;
-    
-                const result = await this.renderer._renderComponentRecursive(
-                    componentToInject, renderContext, routeConfig.inject, false
-                );
-    
-                spaPayload.injectedParts[placeholder] = result.html;
-    
-                result.styles.forEach(style => {
-                    if (!styleMap.has(style.name)) {
-                        styleMap.set(style.name, style);
-                    }
-                });
-            }
-    
-            const layoutAsset = this.assetLoader.getComponent(routeConfig.layout);
-            if (layoutAsset && layoutAsset.style) {
-                if (!styleMap.has(routeConfig.layout)) {
-                    styleMap.set(routeConfig.layout, { name: routeConfig.layout, css: layoutAsset.style });
-                }
-            }
-    
-            spaPayload.styles = Array.from(styleMap.values());
-    
-            this._sendResponse(res, 200, spaPayload, 'application/json');
-        } else {
-          const html = await this.renderer.renderView(routeConfig, renderContext, url);
-          this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
-        }
+        const html = await this.renderer.renderView(routeConfig, dataContext, url);
+        this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
       } else if (routeConfig.type === 'action') {
         const body = await this._parseBody(req);
         const socketId = req.headers['x-socket-id'] || null;
@@ -108,7 +70,9 @@ class RequestHandler {
       }
     } catch (error) {
       console.error(`[RequestHandler] Error processing request ${req.method} ${req.url}:`, error);
-      if (res && !res.headersSent) { this._sendResponse(res, 500, 'Internal Server Error'); }
+      if (res && !res.headersSent) { 
+        this._sendResponse(res, 500, 'Internal Server Error'); 
+      }
     }
   }
   
@@ -155,14 +119,9 @@ class RequestHandler {
     for (const key of (routeConfig.writes || [])) {
       if (finalContext.data[key]) {
         await this.connectorManager.getConnector(key).write(finalContext.data[key]);
-        
-        // ★★★ НАЧАЛО ИСПРАВЛЕНИЯ ★★★
-        // После записи данных в коннектор, мы должны уведомить об этом SocketEngine,
-        // чтобы он мог разослать обновления всем подписанным клиентам.
         if (this.socketEngine) {
             await this.socketEngine.notifyOnWrite(key, finalContext.socketId);
         }
-        // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
       }
     }
 
@@ -170,12 +129,28 @@ class RequestHandler {
     if (internalActions.redirect) {
       responsePayload.redirect = internalActions.redirect;
     } else if (routeConfig.update) {
-      const currentUrl = req ? new URL(req.url, `http://${req.headers.host}`) : null;
-      const renderContext = { data: finalContext.data, user: finalContext.user, globals: this.manifest.globals };
-      responsePayload = await this.renderer.renderComponent(routeConfig.update, renderContext, currentUrl);
-      const componentConfig = this.manifest.components[routeConfig.update];
-      const componentRootId = componentConfig.template.match(/id="([^"]+)"/)?.[1] || routeConfig.update;
-      responsePayload.targetSelector = `#${componentRootId}`;
+      // NEW LOGIC: Instead of rendering HTML, we prepare props for the React component.
+      const componentName = routeConfig.update;
+      const componentConfig = this.manifest.components[componentName];
+      const requiredConnectors = componentConfig?.schema?.requires || [];
+      
+      const props = {
+        data: {},
+        globals: this.manifest.globals || {},
+        url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
+      };
+
+      // Populate props.data with only the data the component needs.
+      for (const connectorName of requiredConnectors) {
+          if(finalContext.data[connectorName]) {
+            props.data[connectorName] = finalContext.data[connectorName];
+          }
+      }
+
+      responsePayload = {
+        update: componentName,
+        props: props,
+      };
     }
     
     if (res && !res.headersSent) {
@@ -198,14 +173,12 @@ class RequestHandler {
 
   _parseBody(req) {
     return new Promise((resolve, reject) => {
-      const contentType = req.headers['content-type'] || '';
       let body = '';
       req.on('data', chunk => { body += chunk.toString(); });
       req.on('end', () => {
         try {
           if (!body) return resolve({});
-          if (contentType.includes('application/json')) return resolve(JSON.parse(body));
-          if (contentType.includes('application/x-www-form-urlencoded')) return resolve(Object.fromEntries(new URLSearchParams(body).entries()));
+          if (req.headers['content-type']?.includes('application/json')) return resolve(JSON.parse(body));
           resolve({});
         } catch (e) { reject(e); }
       });

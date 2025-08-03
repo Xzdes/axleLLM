@@ -14,6 +14,7 @@ const C_YELLOW = '\x1b[33m';
 const C_CYAN = '\x1b[36m';
 const C_GREEN = '\x1b[32m';
 
+// ... (findMonorepoRoot function remains the same)
 function findMonorepoRoot(startPath) {
   let currentPath = startPath;
   while (currentPath !== path.parse(currentPath).root) {
@@ -31,6 +32,7 @@ function findMonorepoRoot(startPath) {
   return null;
 }
 
+
 function runDev(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in DEV mode...${C_RESET}`);
   
@@ -38,25 +40,76 @@ function runDev(appPath) {
     process.exit(1);
   }
 
-  const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
-  const args = [mainProcessPath, appPath, '--dev'];
+  const buildScriptPath = path.resolve(__dirname, 'build.js');
+  let buildProcess;
+  let electronProcess;
 
-  const electronProcess = spawn(electron, args, {
-    stdio: 'inherit'
+  console.log(`${C_CYAN}[axle-cli] Starting component builder...${C_RESET}`);
+  buildProcess = spawn('node', [buildScriptPath, '--watch'], {
+    cwd: appPath
   });
 
-  electronProcess.on('close', code => {
-    console.log(`${C_CYAN}[axle-cli] Application process exited with code ${code}.${C_RESET}`);
-    process.exit(code);
+  buildProcess.stdout.on('data', (data) => {
+    const output = data.toString();
+    // We print the build process output to the main console
+    process.stdout.write(output); 
+    
+    // Check if we received the signal and if Electron is not already running
+    if (output.includes('// BUILD-COMPLETE //') && !electronProcess) {
+      console.log(`${C_CYAN}[axle-cli] Initial build finished. Launching Electron...${C_RESET}`);
+      const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
+      const args = [mainProcessPath, appPath, '--dev'];
+  
+      electronProcess = spawn(electron, args, { stdio: 'inherit' });
+  
+      electronProcess.on('close', code => {
+        console.log(`${C_CYAN}[axle-cli] Application process exited with code ${code}.${C_RESET}`);
+        if (buildProcess) buildProcess.kill();
+        process.exit(code);
+      });
+    }
+  });
+
+  buildProcess.stderr.on('data', (data) => {
+    process.stderr.write(data.toString());
+  });
+
+  buildProcess.on('error', (err) => {
+    console.error(`${C_RED}[axle-cli] Failed to start build process:${C_RESET}`, err);
+    process.exit(1);
+  });
+
+  process.on('SIGINT', () => {
+    if (buildProcess) buildProcess.kill();
+    if (electronProcess) electronProcess.kill();
+    process.exit();
   });
 }
 
+// ... (runStart and runPackage remain mostly the same, but let's update them for consistency)
+
 function runStart(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in PRODUCTION mode...${C_RESET}`);
-  const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
-  const args = [mainProcessPath, appPath];
-  const electronProcess = spawn(electron, args, { stdio: 'inherit' });
-  electronProcess.on('close', code => process.exit(code));
+  console.log(`${C_CYAN}[axle-cli] Running production component build...${C_RESET}`);
+  const buildScriptPath = path.resolve(__dirname, 'build.js');
+  
+  const buildProcess = spawn('node', [buildScriptPath], {
+    stdio: 'inherit',
+    cwd: appPath
+  });
+
+  buildProcess.on('close', (code) => {
+    if (code !== 0) {
+      console.error(`${C_RED}[axle-cli] Production build failed. Aborting start.${C_RESET}`);
+      process.exit(code);
+    }
+    console.log(`${C_GREEN}[axle-cli] Production build complete.${C_RESET}`);
+    console.log(`${C_CYAN}[axle-cli] Launching application...${C_RESET}`);
+    const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
+    const args = [mainProcessPath, appPath];
+    const electronProcess = spawn(electron, args, { stdio: 'inherit' });
+    electronProcess.on('close', code => process.exit(code));
+  });
 }
 
 async function runPackage(appPath) {
@@ -85,11 +138,23 @@ async function runPackage(appPath) {
     }
     console.log(`${C_CYAN}[axle-cli] Using Electron version: ${electronVersion}${C_RESET}`);
     
+    console.log(`${C_CYAN}[axle-cli] Running production component build...${C_RESET}`);
+    const buildScriptPath = path.resolve(__dirname, 'build.js');
+    await new Promise((resolve, reject) => {
+        const buildProcess = spawn('node', [buildScriptPath], { stdio: 'inherit', cwd: appPath });
+        buildProcess.on('close', code => code === 0 ? resolve() : reject(new Error('Build failed')));
+    });
+    console.log(`${C_GREEN}[axle-cli] Production build complete.${C_RESET}`);
+
     const result = await builder.build({
       projectDir: appPath,
       config: {
         "directories": { "output": path.join(appPath, "dist") },
-        "electronVersion": electronVersion
+        "electronVersion": electronVersion,
+        "files": [
+          "**/*",
+          ".axle-build/**/*" 
+        ]
       }
     });
 

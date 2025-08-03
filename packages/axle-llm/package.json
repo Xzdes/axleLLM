@@ -1,6 +1,6 @@
 {
   "name": "axle-llm",
-  "version": "2.2.14",
+  "version": "3.0.0",
   "description": "A declarative engine for building native desktop applications with web technologies, designed for LLM architects.",
   "main": "index.js",
   "bin": {
@@ -19,14 +19,14 @@
   },
   "dependencies": {
     "cookie": "1.0.2",
-    "electron": "37.2.4",
-    "electron-builder": "26.0.19",
     "electron-reloader": "1.2.3",
+    "esbuild": "^0.25.8",
     "get-port": "7.1.0",
-    "posthtml": "0.16.6",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
     "wise-json-db": "6.0.2",
     "ws": "8.18.0",
-    "zod": "4.0.13"
+    "zod": "4.0.14"
   },
   "keywords": [
     "declarative",
@@ -36,6 +36,7 @@
     "native",
     "electron",
     "nodejs",
+    "react",
     "commonjs"
   ],
   "author": "Xzdes",

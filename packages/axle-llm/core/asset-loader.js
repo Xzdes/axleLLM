@@ -7,66 +7,43 @@ class AssetLoader {
     this.appPath = appPath;
     this.manifest = manifest;
     
-    this.components = {};
-    this.actions = {};
-    this.bridgeModules = {};
+    // We only need to cache styles, actions, and bridge modules now.
+    // React components are loaded dynamically by the Renderer from the .axle-build directory.
+    this.styles = new Map();
+    this.actions = new Map();
+    this.bridgeModules = new Map();
 
     this.loadAll();
   }
 
   loadAll() {
-    console.log('[AssetLoader] Caching all application assets...');
-    this._loadComponents();
+    console.log('[AssetLoader] Caching application assets (styles, actions, bridge modules)...');
+    this._loadComponentStyles();
     this._loadActions();
     this._loadBridgeModules();
     console.log('[AssetLoader] Asset caching complete.');
   }
 
-  _loadComponents() {
+  _loadComponentStyles() {
     const componentsConfig = this.manifest.components || {};
     const componentsDir = path.join(this.appPath, 'app', 'components');
 
     for (const name in componentsConfig) {
       const config = componentsConfig[name];
-      const componentData = { template: null, style: null };
-
-      let templateFilename, styleFilename;
-
-      if (typeof config === 'string') {
-        templateFilename = config;
-      } else if (typeof config === 'object' && config.template) {
-        templateFilename = config.template;
-        styleFilename = config.style;
-      } else {
-        console.warn(`[AssetLoader] WARN: Invalid component definition for '${name}'. Skipping.`);
-        continue;
-      }
       
-      const templatePath = path.join(componentsDir, templateFilename);
-
-      try {
-        // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
-        const htmlContent = fs.readFileSync(templatePath, 'utf-8');
+      // We only care about the 'style' property now.
+      // The template is a .jsx file handled by the build process.
+      if (typeof config === 'object' && config.style) {
+        const styleFilename = config.style;
+        const stylePath = path.join(componentsDir, styleFilename);
         
-        // Просто сохраняем весь HTML-контент как шаблон.
-        // Renderer сам разберется со стилями.
-        componentData.template = htmlContent;
-
-        // Если в манифесте указан отдельный файл стилей, загружаем его.
-        if (styleFilename) {
-            const stylePath = path.join(componentsDir, styleFilename);
-            try {
-                componentData.style = fs.readFileSync(stylePath, 'utf-8');
-            } catch (e) {
-                console.warn(`[AssetLoader] WARN: Style file not found at ${stylePath}`);
-            }
+        try {
+          const cssContent = fs.readFileSync(stylePath, 'utf-8');
+          this.styles.set(name, cssContent);
+        } catch (error) {
+          console.warn(`[AssetLoader] WARN: Style file not found for component '${name}' at path: ${stylePath}`);
         }
-        // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
-      } catch (error) {
-        throw new Error(`[AssetLoader] CRITICAL: Template file not found for component '${name}' at path: ${templatePath}`);
       }
-      
-      this.components[name] = componentData;
     }
   }
 
@@ -80,7 +57,8 @@ class AssetLoader {
         const actionPath = path.join(actionsDir, file);
         try {
           delete require.cache[require.resolve(actionPath)];
-          this.actions[actionName] = require(actionPath);
+          const actionModule = require(actionPath);
+          this.actions.set(actionName, actionModule);
         } catch (error) {
           throw new Error(`[AssetLoader] CRITICAL: Failed to load action script '${actionName}' from ${actionPath}. Error: ${error.message}`);
         }
@@ -99,23 +77,24 @@ class AssetLoader {
       const modulePath = path.join(bridgeDir, fileName);
       try {
         delete require.cache[require.resolve(modulePath)];
-        this.bridgeModules[moduleName] = require(modulePath);
+        const bridgeModule = require(modulePath);
+        this.bridgeModules.set(moduleName, bridgeModule);
       } catch (error) {
         throw new Error(`[AssetLoader] CRITICAL: Failed to load bridge module '${moduleName}' from ${modulePath}. Error: ${error.message}`);
       }
     }
   }
 
-  getComponent(name) {
-    return this.components[name];
+  getStyleForComponent(name) {
+    return this.styles.get(name);
   }
 
   getAction(name) {
-    return this.actions[name];
+    return this.actions.get(name);
   }
 
   getBridgeModule(name) {
-    return this.bridgeModules[name];
+    return this.bridgeModules.get(name);
   }
 }
 
