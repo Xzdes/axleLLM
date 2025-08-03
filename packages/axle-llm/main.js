@@ -4,25 +4,13 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const { createServerInstance } = require('./core/server');
 const { loadManifest } = require('./core/config-loader');
-// ★★★ НАЧАЛО ИСПРАВЛЕНИЯ ★★★
-const getPort = (...args) => import('get-port').then(({default: getPort}) => getPort(...args));
-// ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
-
-process.on('uncaughtException', (error) => {
-  console.error('[axle-main] Uncaught Exception:', error);
-  dialog.showErrorBox('An Unhandled Error Occurred', error.stack || error.message);
-  app.quit();
-});
+const getPort = require('get-port'); // ★★★ ВОТ ОНО! Простой и надежный require ★★★
 
 const isDev = process.argv.includes('--dev');
 const appPath = isDev ? process.argv[2] : (path.basename(app.getAppPath()).endsWith('.asar') ? path.dirname(app.getAppPath()) : app.getAppPath());
 
 if (!appPath) {
-  const errorMsg = '[axle-main] Critical: Application path could not be determined. Exiting.';
-  console.error(errorMsg);
-  if (app.isReady()) {
-    dialog.showErrorBox('Critical Error', 'Application path could not be determined. Exiting.');
-  }
+  console.error('[axle-main] Critical: Application path could not be determined. Exiting.');
   process.exit(1);
 }
 
