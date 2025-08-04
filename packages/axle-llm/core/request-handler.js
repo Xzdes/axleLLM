@@ -69,7 +69,7 @@ class RequestHandler {
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
         const finalDataContext = { ...dataContext, user };
         const html = await this.renderer.renderView(routeConfig, finalDataContext, url);
-        this._sendResponse(res, 200, html, 'text/html; charset=utf-8'); // <-- Правильный тип контента для HTML
+        this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
       } else if (routeConfig.type === 'action') {
         const body = await this._parseBody(req);
         const socketId = req.headers['x-socket-id'] || null;
@@ -131,29 +131,43 @@ class RequestHandler {
     } else if (routeConfig.update) {
       const componentName = routeConfig.update;
       
-      // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
-      // 1. Находим родительский view-роут, чтобы понять, какой полный набор данных был у страницы.
       const parentViewRoute = this._findParentViewRouteForComponent(componentName);
-      const allAvailableConnectors = parentViewRoute ? parentViewRoute.reads || [] : [];
-      
-      // 2. Собираем ПОЛНЫЙ и АКТУАЛЬНЫЙ набор данных для страницы.
-      const propsData = {};
-      for (const connectorName of allAvailableConnectors) {
-          if(finalContext.data[connectorName]) {
-            propsData[connectorName] = finalContext.data[connectorName];
-          }
-      }
 
-      responsePayload = {
-        update: componentName,
-        props: {
-            data: propsData, // <-- Теперь здесь ВСЕ данные, которые были на странице
-            user: finalContext.user,
-            globals: this.manifest.globals || {},
-            url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
-        },
-      };
-      // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+      if (!parentViewRoute) {
+        console.error(`[RequestHandler] CRITICAL: Could not find a parent view route for the updated component '${componentName}'. This may result in incomplete data on the client.`);
+        // Fallback (маловероятный, но безопасный)
+        const updatedData = {};
+        const relevantConnectors = [...(routeConfig.reads || []), ...(routeConfig.writes || [])];
+        new Set(relevantConnectors).forEach(cn => { if(finalContext.data[cn]) updatedData[cn] = finalContext.data[cn]; });
+        responsePayload = {
+            update: componentName,
+            props: { data: updatedData, user: finalContext.user, globals: this.manifest.globals, url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null) }
+        };
+      } else {
+        // ★★★ ГЛАВНАЯ ЛОГИКА ★★★
+        const allRequiredConnectors = parentViewRoute.reads || [];
+        const completeDataForView = {};
+
+        for (const connectorName of allRequiredConnectors) {
+            if (finalContext.data[connectorName]) {
+                completeDataForView[connectorName] = finalContext.data[connectorName];
+            } else {
+                const connector = this.connectorManager.getConnector(connectorName);
+                if (connector) {
+                    completeDataForView[connectorName] = await connector.read();
+                }
+            }
+        }
+        responsePayload = {
+            update: componentName,
+            props: {
+                data: completeDataForView,
+                user: finalContext.user,
+                globals: this.manifest.globals || {},
+                url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
+            },
+        };
+      }
     }
     
     if (res && !res.headersSent) {
@@ -166,17 +180,10 @@ class RequestHandler {
     for (const key in this.manifest.routes) {
         const route = this.manifest.routes[key];
         if (route.type === 'view') {
-            const injectedComponents = Object.values(route.inject || {});
-            if (route.layout === componentName || injectedComponents.includes(componentName)) {
+            const allComponentsInView = [route.layout, ...Object.values(route.inject || {})];
+            if (allComponentsInView.includes(componentName)) {
                 return route;
             }
-        }
-    }
-    // Ищем компонент в качестве дочернего для другого компонента (задел на будущее)
-    for (const name in this.manifest.components) {
-        const config = this.manifest.components[name];
-        if (config.inject && Object.values(config.inject).includes(componentName)) {
-            return this._findParentViewRouteForComponent(name);
         }
     }
     return null;
@@ -208,7 +215,6 @@ class RequestHandler {
     if (res.headersSent) {
       return;
     }
-    // ★★★ ИСПРАВЛЕНИЕ: Отправляем данные как есть, если это не объект. JSON.stringify только для объектов.
     const body = (typeof data === 'object' && data !== null) ? JSON.stringify(data) : String(data);
     res.writeHead(statusCode, { 
         'Content-Type': contentType, 

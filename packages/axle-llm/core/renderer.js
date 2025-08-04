@@ -31,7 +31,6 @@ class Renderer {
     const LayoutComponent = this._loadCompiledComponent(layoutName);
     if (!LayoutComponent) return `<html><body>Error: Layout component could not be loaded.</body></html>`;
     
-    // Отделяем пользователя от данных коннекторов для передачи в props
     const { user, ...connectorData } = dataContext;
     
     const props = {
@@ -64,9 +63,8 @@ class Renderer {
         const style = this.assetLoader.getStyleForComponent(name);
         return style ? `<style data-component-name="${name}">${style}</style>` : null;
     }).filter(Boolean).join('\n');
-
-    // ★★★ НАЧАЛО ИЗМЕНЕНИЙ ★★★
-    // Мы вставляем скрипт инициализации ПЕРЕД загрузкой основного бандла.
+    
+    // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ★★★
     const finalHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,18 +76,11 @@ class Renderer {
 <body>
     <div id="root">${appHtml}</div>
     <script>
-      // Эта строка гарантирует, что объект существует ДО загрузки бандла.
-      // Это решает ошибку "Cannot set properties of undefined (setting '...')".
-      window.axle = { components: {} };
-      
-      // Сохраняем все данные, включая пользователя, для клиента.
-      // Это понадобится для правильного обновления компонентов.
-      window.__INITIAL_DATA__ = ${JSON.stringify(dataContext)}
+      window.__INITIAL_DATA__ = ${JSON.stringify(connectorData)};
     </script>
     <script src="/public/bundle.js"></script>
 </body>
 </html>`;
-    // ★★★ КОНЕЦ ИЗМЕНЕНИЙ ★★★
 
     return finalHtml;
   }
@@ -105,7 +96,6 @@ class Renderer {
 
   _getUrlContext(reqUrl) {
     if (!reqUrl) return { pathname: '/', query: {} };
-    // Используем полный URL для корректного парсинга
     const url = new URL(reqUrl.toString(), 'http://localhost');
     return { pathname: url.pathname, query: Object.fromEntries(url.searchParams) };
   }

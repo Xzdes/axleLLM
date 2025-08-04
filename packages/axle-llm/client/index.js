@@ -7,8 +7,15 @@ import ReactDOM from 'react-dom/client';
 // 1. Делаем React и ReactDOM глобально доступными для всего остального кода.
 window.React = React;
 window.ReactDOM = ReactDOM;
-// ★ ИЗМЕНЕНИЕ: Строка "window.axle = { components: {} };" УДАЛЕНА ОТСЮДА.
-// Инициализация теперь происходит в build-client.js
+
+// ★★★ ЭТО И ЕСТЬ ИСПРАВЛЕНИЕ ★★★
+// Мы инициализируем глобальный объект ЗДЕСЬ, в самом начале.
+// Это гарантирует, что `window.axle.components` будет существовать
+// до того, как его попытается использовать engine-client.js или
+// скрипты регистрации компонентов, которые добавляются в конец бандла.
+window.axle = {
+  components: {}
+};
 
 // 2. Импортируем *только* функцию инициализации из нашего движка.
 import { initialize } from './engine-client.js';
