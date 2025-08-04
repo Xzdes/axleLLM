@@ -39,7 +39,9 @@ async function runBuild() {
         const entryPoints = findFilesByExtension(componentsDir, '.jsx');
         if (entryPoints.length === 0) {
             console.log('[axle-build] No .jsx components found.');
-            console.log('// BUILD-COMPLETE //');
+            if (process.argv.includes('--watch')) {
+                 console.log('// BUILD-COMPLETE //');
+            }
             return;
         }
 
@@ -56,6 +58,7 @@ async function runBuild() {
             }
         }
 
+        // --- КОНФИГУРАЦИЯ ДЛЯ СЕРВЕРА (без изменений) ---
         const serverOptions = {
             entryPoints,
             outdir: serverOutDir,
@@ -82,6 +85,40 @@ async function runBuild() {
             }],
         };
 
+        // ★★★ НАЧАЛО ИСПРАВЛЕНИЙ: КОНФИГУРАЦИЯ ДЛЯ КЛИЕНТА ★★★
+
+        // Этот плагин решает проблему "Dynamic require of 'react' is not supported".
+        // Он перехватывает импорты 'react' и 'react-dom/client' и заменяет их
+        // кодом, который обращается к глобальным window.React и window.ReactDOM.
+        const reactGlobalsPlugin = {
+            name: 'react-globals',
+            setup(build) {
+                // Перехватываем попытку найти 'react'
+                build.onResolve({ filter: /^react$/ }, args => ({
+                    path: args.path,
+                    namespace: 'react-global',
+                }));
+                
+                // Перехватываем попытку найти 'react-dom/client'
+                build.onResolve({ filter: /^react-dom\/client$/ }, args => ({
+                    path: args.path,
+                    namespace: 'react-dom-global',
+                }));
+
+                // Генерируем "виртуальный" модуль для react
+                build.onLoad({ filter: /.*/, namespace: 'react-global' }, () => ({
+                    contents: 'module.exports = window.React;',
+                    loader: 'js',
+                }));
+
+                // Генерируем "виртуальный" модуль для react-dom
+                build.onLoad({ filter: /.*/, namespace: 'react-dom-global' }, () => ({
+                    contents: 'module.exports = window.ReactDOM;',
+                    loader: 'js',
+                }));
+            },
+        };
+
         const clientOptions = {
             entryPoints,
             outdir: clientOutDir,
@@ -92,24 +129,29 @@ async function runBuild() {
             jsx: 'transform',
             jsxFactory: 'React.createElement',
             jsxFragment: 'React.Fragment',
-            external: ['react', 'react-dom'],
-            plugins: [{
-                name: 'client-reporter',
-                setup(build) {
-                     build.onEnd(result => {
-                        if (result.errors.length === 0) {
-                            console.log(`[axle-build] ✅ Client components build complete.`);
-                            if(!isWatchMode || !clientBuildDone) {
-                                clientBuildDone = true;
-                                signalIfReady();
-                           }
-                        } else {
-                            console.error('[axle-build] 🚨 Client components build failed.');
-                        }
-                    });
-                },
-            }],
+            // УБИРАЕМ 'external', так как плагин теперь управляет этим.
+            plugins: [
+                reactGlobalsPlugin, // <-- ДОБАВЛЯЕМ НАШ ПЛАГИН
+                {
+                    name: 'client-reporter',
+                    setup(build) {
+                         build.onEnd(result => {
+                            if (result.errors.length === 0) {
+                                console.log(`[axle-build] ✅ Client components build complete.`);
+                                if(!isWatchMode || !clientBuildDone) {
+                                    clientBuildDone = true;
+                                    signalIfReady();
+                               }
+                            } else {
+                                console.error('[axle-build] 🚨 Client components build failed.');
+                            }
+                        });
+                    },
+                }
+            ],
         };
+
+        // ★★★ КОНЕЦ ИСПРАВЛЕНИЙ ★★★
 
         if (isWatchMode) {
             console.log('[axle-build] Starting watchers for server and client component builds...');

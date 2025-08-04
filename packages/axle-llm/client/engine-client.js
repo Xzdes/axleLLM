@@ -1,84 +1,58 @@
 // packages/axle-llm/client/engine-client.js
 'use strict';
 
-// --- Global state for the client engine ---
+// Гарантируем, что глобальный объект существует до выполнения любого другого кода
+window.axle = window.axle || {};
+window.axle.components = window.axle.components || {};
+
+// --- Глобальное состояние ---
 let socketId = null;
 let currentActionController = null;
 let ws = null;
 const componentRoots = new Map();
-// ★ НОВОЕ: Отслеживаем активные подписки, чтобы не дублировать их.
 const activeSocketSubscriptions = new Set();
 
 /**
- * Main initialization function for the client-side engine.
+ * Главная функция инициализации.
  */
 export function initialize() {
   console.log('[axle-client] Initializing React-powered client...');
   hydrateRoot();
-
-  // ★ ИЗМЕНЕНИЕ: Функция для обработки событий переименована для ясности.
-  const supportedEvents = ['click', 'submit', 'input', 'change'];
-  supportedEvents.forEach(eventType => {
+  ['click', 'submit', 'input', 'change'].forEach(eventType => {
     document.body.addEventListener(eventType, handleDOMEvent, true);
   });
-
   initializeWebSocket();
-  initializeMutationObserver(); // ★ НОВОЕ: Запускаем наблюдатель за DOM.
+  initializeMutationObserver();
   console.log('[axle-client] Initialized successfully.');
 }
 
-/**
- * Hydrates the initial server-rendered HTML.
- */
 function hydrateRoot() {
   const rootElement = document.getElementById('root');
-  if (!rootElement) {
-    console.error('[axle-client] CRITICAL: Root element with id="root" not found. Hydration failed.');
-    return;
-  }
+  if (!rootElement) return console.error('[axle-client] CRITICAL: Root element not found.');
   try {
-    if (typeof window.React === 'undefined' || typeof window.ReactDOM === 'undefined') {
-      console.error('[axle-client] CRITICAL: React or ReactDOM not found on window object.');
-      return;
-    }
-    const ClientAppShell = () => null;
-    window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(ClientAppShell, {}));
+    if (!window.React || !window.ReactDOM) return console.error('[axle-client] CRITICAL: React or ReactDOM not found.');
+    window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(() => null));
     console.log('[axle-client] Hydration complete.');
   } catch (e) {
     console.error('[axle-client] CRITICAL: Hydration failed.', e);
   }
 }
 
-/**
- * ★ РЕФАКТОРИНГ: Эта функция теперь только обрабатывает DOM-событие и вызывает executeAction.
- * @param {Event} event - The DOM event.
- */
 async function handleDOMEvent(event) {
   const element = event.target.closest('[atom-action]');
   if (!element) return;
-
   const requiredEventType = element.getAttribute('atom-event') || (element.tagName === 'FORM' ? 'submit' : 'click');
   if (event.type !== requiredEventType) return;
-
   event.preventDefault();
   event.stopPropagation();
-
-  // Вызываем основную логику выполнения действия.
   executeAction(element, requiredEventType);
 }
 
-/**
- * ★ РЕФАКТОРИНГ: Основная логика выполнения действия, вынесенная из обработчика.
- * Может быть вызвана как из DOM-события, так и программно (например, от WebSocket).
- * @param {HTMLElement} element - The element with atom-action attributes.
- * @param {string} triggerType - The type of event that triggered the action ('click', 'input', etc.).
- */
 async function executeAction(element, triggerType = 'programmatic') {
   const action = element.getAttribute('atom-action');
   const targetSelector = element.getAttribute('atom-target');
   if (!action) return;
 
-  // Логика прерывания для событий ввода (дебаунсинг)
   if (triggerType === 'input' && currentActionController) {
     currentActionController.abort();
   }
@@ -94,26 +68,18 @@ async function executeAction(element, triggerType = 'programmatic') {
       signal: currentActionController.signal,
     });
 
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
-
+    if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+    
     const payload = await response.json();
     processServerPayload(payload, targetSelector);
 
   } catch (error) {
-    if (error.name === 'AbortError') {
-      console.log('[axle-client] Fetch aborted for debouncing (this is expected).');
-      return;
+    if (error.name !== 'AbortError') {
+      console.error(`[axle-client] Action failed for "${action}":`, error);
     }
-    console.error(`[axle-client] Action failed for "${action}":`, error);
   }
 }
 
-
-/**
- * Processes the JSON payload from the server.
- */
 function processServerPayload(payload, targetSelector) {
   if (payload.redirect) {
     window.location.href = payload.redirect;
@@ -122,49 +88,46 @@ function processServerPayload(payload, targetSelector) {
 
   if (payload.update) {
     const componentToUpdate = payload.update;
-    const newProps = payload.props;
+    const propsFromServer = payload.props;
+
+    if (!propsFromServer || !propsFromServer.data) {
+        return console.error(`[axle-client] Invalid payload for update: 'props.data' is missing.`);
+    }
     
     const targetElement = document.querySelector(targetSelector);
-    if (!targetElement) {
-      console.error(`[axle-client] Target element "${targetSelector}" for component "${componentToUpdate}" not found.`);
-      return;
-    }
+    if (!targetElement) return console.error(`[axle-client] Target element "${targetSelector}" not found.`);
     
     const Component = window.axle.components[componentToUpdate];
-    if (!Component) {
-      console.error(`[axle-client] Component definition for '${componentToUpdate}' not found.`);
-      return;
-    }
-
+    if (!Component) return console.error(`[axle-client] Component definition for '${componentToUpdate}' not found.`);
+    
+    // ★★★ ФИНАЛЬНОЕ РЕШЕНИЕ ★★★
+    // 1. Сервер теперь ВСЕГДА присылает полный и правильный объект props.
+    //    Нам больше не нужно ничего "сливать" или угадывать.
+    // 2. Просто берем то, что прислал сервер, и рендерим.
+    // 3. Также обновляем `window.__INITIAL_DATA__`, чтобы быть готовыми к следующему клику.
+    window.__INITIAL_DATA__ = propsFromServer.data;
+    
     let root = componentRoots.get(targetSelector);
     if (!root) {
       root = window.ReactDOM.createRoot(targetElement);
       componentRoots.set(targetSelector, root);
     }
     
-    root.render(window.React.createElement(Component, newProps));
+    root.render(window.React.createElement(Component, propsFromServer));
   }
 }
 
-/**
- * Extracts the body for a POST/PUT request from form data.
- */
 function getActionBody(element) {
   const form = element.closest('form');
   const data = {};
   if (form) {
     const formData = new FormData(form);
-    for (const [key, value] of formData.entries()) {
-      data[key] = value;
-    }
+    for (const [key, value] of formData.entries()) { data[key] = value; }
   }
   const payloadAttr = element.getAttribute('atom-payload');
   if (payloadAttr) {
-    try {
-      Object.assign(data, JSON.parse(payloadAttr));
-    } catch (e) {
-      console.error('Invalid atom-payload JSON:', payloadAttr);
-    }
+    try { Object.assign(data, JSON.parse(payloadAttr)); } 
+    catch (e) { console.error('Invalid atom-payload JSON:', payloadAttr); }
   }
   if (element.name && element.value !== undefined && !data.hasOwnProperty(element.name)) {
     data[element.name] = element.value;
@@ -172,94 +135,51 @@ function getActionBody(element) {
   return JSON.stringify(data);
 }
 
-/**
- * Initializes the WebSocket connection.
- */
 function initializeWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}`;
-  ws = new WebSocket(wsUrl);
-
+  ws = new WebSocket(`${protocol}//${window.location.host}`);
   ws.onopen = () => {
     console.log('[axle-client] WebSocket connection established.');
-    // ★ ИЗМЕНЕНИЕ: При подключении сканируем DOM на наличие уже существующих элементов для подписки.
     scanAndSubscribeToSockets();
   };
-  
   ws.onmessage = (message) => {
     try {
       const data = JSON.parse(message.data);
-
       if (data.type === 'socket_id_assigned') {
         socketId = data.id;
-        console.log(`[axle-client] WebSocket ID assigned: ${socketId}`);
-        return;
+      } else if (data.type === 'event' && data.event) {
+        document.querySelectorAll(`[atom-on-event="${data.event}"]`).forEach(el => executeAction(el));
       }
-      
-      // ★★★ НАЧАЛО НОВОЙ ЛОГИКИ: ОБРАБОТКА PUSH-СОБЫТИЙ ОТ СЕРВЕРА ★★★
-      if (data.type === 'event' && data.event) {
-        console.log(`[axle-client] Received WebSocket event: '${data.event}'`);
-        const subscribedElements = document.querySelectorAll(`[atom-on-event="${data.event}"]`);
-        
-        if (subscribedElements.length > 0) {
-          subscribedElements.forEach(element => {
-            console.log(`[axle-client] Triggering action on element for event '${data.event}'`, element);
-            // Программно вызываем выполнение действия, связанного с этим элементом.
-            executeAction(element);
-          });
-        }
-      }
-      // ★★★ КОНЕЦ НОВОЙ ЛОГИКИ ★★★
-
-    } catch (e) {
-      console.error('[axle-client] Failed to handle WebSocket message:', e);
-    }
+    } catch (e) { console.error('[axle-client] Failed to handle WebSocket message:', e); }
   };
-
   ws.onclose = () => {
-    console.log('[axle-client] WebSocket connection closed. Reconnecting in 3 seconds...');
-    socketId = null;
-    ws = null;
-    activeSocketSubscriptions.clear(); // Сбрасываем подписки при разрыве.
+    console.log('[axle-client] WebSocket connection closed. Reconnecting...');
+    socketId = null; ws = null;
+    activeSocketSubscriptions.clear();
     setTimeout(initializeWebSocket, 3000);
   };
-
   ws.onerror = (error) => {
     console.error('[axle-client] WebSocket error:', error);
     ws.close();
   };
 }
 
-/**
- * ★ НОВОЕ: Сканирует DOM в поисках элементов с атрибутом `atom-socket` и подписывается на каналы.
- */
 function scanAndSubscribeToSockets() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
   document.querySelectorAll('[atom-socket]').forEach(el => {
     const channel = el.getAttribute('atom-socket');
-    // Подписываемся только если еще не подписаны на этот канал.
     if (channel && !activeSocketSubscriptions.has(channel)) {
-      console.log(`[axle-client] Subscribing to WebSocket channel: '${channel}'`);
-      ws.send(JSON.stringify({ type: 'subscribe', channel: channel }));
       activeSocketSubscriptions.add(channel);
+      ws.send(JSON.stringify({ type: 'subscribe', channel }));
     }
   });
 }
 
-/**
- * ★ НОВОЕ: Инициализирует MutationObserver для отслеживания появления новых
- * компонентов, которым нужна WebSocket-подписка (например, после AJAX-обновления).
- */
 function initializeMutationObserver() {
-    const observer = new MutationObserver((mutationsList) => {
-        for(const mutation of mutationsList) {
-            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                // Проверяем, не появился ли элемент, которому нужна подписка.
-                scanAndSubscribeToSockets();
-            }
+    const observer = new MutationObserver((mutations) => {
+        if (mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0)) {
+            scanAndSubscribeToSockets();
         }
     });
-
     observer.observe(document.body, { childList: true, subtree: true });
 }

@@ -27,6 +27,7 @@ async function runClientBuild() {
         const assembleAndWriteBundle = async () => {
             try {
                 const result = await esbuild.build(buildOptions);
+                // Убираем преамбулу отсюда, так как она оказалась ненадежной.
                 let finalContent = result.outputFiles[0].text;
                 
                 if (fs.existsSync(clientComponentsDir)) {
@@ -34,17 +35,21 @@ async function runClientBuild() {
                     for (const file of componentFiles) {
                         const componentName = path.basename(file, '.js');
                         let componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
-
-                        // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
-                        // Удаляем сгенерированные esbuild'ом require, которые не работают в браузере.
-                        // React и так будет доступен глобально через window.React.
+                        
                         componentContent = componentContent.replace(/var React = require\("react"\);/g, '');
                         componentContent = componentContent.replace(/var import_react = require\("react"\);/g, '');
-                        // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
 
+                        // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+                        // Создаем "самодостаточный" блок для каждого компонента.
                         const script = `
 (function() {
   try {
+    // Эта проверка решает гонку состояний.
+    // Если глобального хранилища нет, этот скрипт его создаст.
+    if (!window.axle || !window.axle.components) {
+      window.axle = window.axle || {};
+      window.axle.components = {};
+    }
     const exports = {}; const module = { exports };
     ${componentContent.replace('var axleComponent =', 'module.exports =')}
     if (module.exports) {
@@ -52,6 +57,7 @@ async function runClientBuild() {
     }
   } catch(e) { console.error('Failed to load component ${componentName}:', e); }
 })();`;
+                        // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
                         finalContent += script;
                     }
                 }

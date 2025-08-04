@@ -39,10 +39,8 @@ class RequestHandler {
         const bundlePath = path.join(this.appPath, 'public', 'bundle.js');
         try {
           const scriptContent = fs.readFileSync(bundlePath, 'utf-8');
-          console.log('[RequestHandler] Serving client bundle.');
           this._sendResponse(res, 200, scriptContent, 'application/javascript');
         } catch (e) {
-            console.error(`[RequestHandler] CRITICAL: Could not find client bundle at ${bundlePath}`);
             this._sendResponse(res, 404, 'Client bundle not found.');
         }
         return;
@@ -50,43 +48,29 @@ class RequestHandler {
 
       const routeConfig = this._findRoute(req.method, url.pathname);
       if (!routeConfig) { 
-        console.log(`[RequestHandler] No route found for ${req.method} ${url.pathname}. Sending 404.`);
         return this._sendResponse(res, 404, 'Not Found'); 
       }
-      console.log(`[RequestHandler] Route found: '${routeConfig.key}', type: '${routeConfig.type}'`);
       
       const user = this.authEngine ? await this.authEngine.getUserFromRequest(req) : null;
-      console.log(`[RequestHandler] User status: ${user ? `Logged in as ${user.login || user.name}` : 'Not authenticated'}`);
       
-      // ★★★ НАЧАЛО ИСПРАВЛЕННОЙ ЛОГИКИ АВТОРИЗАЦИИ ★★★
       if (routeConfig.auth?.required && !user) {
         const redirectUrl = routeConfig.auth.failureRedirect || '/login';
-
-        // Если это запрос СТРАНИЦЫ (view), делаем настоящий HTTP-редирект (код 302).
         if (routeConfig.type === 'view') {
-          console.log(`[RequestHandler] Unauthenticated access to protected view route. Performing HTTP 302 redirect to ${redirectUrl}`);
           this.authEngine.redirect(res, redirectUrl);
           return;
         }
-        
-        // Если это запрос ДЕЙСТВИЯ (action), отправляем JSON, чтобы клиентский JS его обработал.
         if (routeConfig.type === 'action') {
-          console.log(`[RequestHandler] Unauthenticated access to protected action. Sending JSON redirect to ${redirectUrl}`);
           this._sendResponse(res, 200, { redirect: redirectUrl }, 'application/json');
           return;
         }
       }
-      // ★★★ КОНЕЦ ИСПРАВЛЕНИЙ ★★★
       
       if (routeConfig.type === 'view') {
-        console.log(`[RequestHandler] Preparing to render view for route '${routeConfig.key}'...`);
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
-        // ★ НОВОЕ: Передаем пользователя в контекст данных для рендеринга.
         const finalDataContext = { ...dataContext, user };
         const html = await this.renderer.renderView(routeConfig, finalDataContext, url);
         this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
       } else if (routeConfig.type === 'action') {
-        console.log(`[RequestHandler] Preparing to run action for route '${routeConfig.key}'...`);
         const body = await this._parseBody(req);
         const socketId = req.headers['x-socket-id'] || null;
         const initialContext = { user, body, socketId, routeName: routeConfig.key };
@@ -104,7 +88,6 @@ class RequestHandler {
     const routeConfig = this.manifest.routes[context.routeName];
     if (!routeConfig) throw new Error(`Action route '${context.routeName}' not found.`);
 
-    console.log(`[RequestHandler-runAction] Running action '${context.routeName}'...`);
     const dataContext = context.data || await this.connectorManager.getContext(routeConfig.reads || []);
     const executionContext = { ...context, data: dataContext };
     const engine = new ActionEngine(executionContext, this.appPath, this.assetLoader, this);
@@ -114,14 +97,12 @@ class RequestHandler {
     } catch (engineError) {
         console.error(`[RequestHandler-runAction] ActionEngine failed for route '${context.routeName}'. Error:`, engineError.message);
         if (res && !res.headersSent) {
-            const errorPayload = { error: 'Action execution failed', details: engineError.message };
-            this._sendResponse(res, 500, errorPayload, 'application/json');
+            this._sendResponse(res, 500, { error: 'Action execution failed', details: engineError.message }, 'application/json');
         }
         return;
     }
     
     if (routeConfig.internal) {
-      console.log(`[RequestHandler-runAction] Internal action '${context.routeName}' finished.`);
       return { data: engine.context.data };
     }
     
@@ -129,25 +110,21 @@ class RequestHandler {
   }
 
   async _finalizeAction(engine, routeConfig, req, res) {
-    console.log(`[RequestHandler-finalizeAction] Finalizing action for route '${routeConfig.key}'...`);
     const finalContext = engine.context;
     const internalActions = finalContext._internal || {};
     let sessionCookie = null;
 
     if (this.authEngine) {
         if (internalActions.loginUser) {
-          console.log(`[RequestHandler-finalizeAction] Creating session cookie for user: ${internalActions.loginUser.login}`);
           sessionCookie = await this.authEngine.createSessionCookie(internalActions.loginUser);
         }
         if (internalActions.logout) {
-          console.log(`[RequestHandler-finalizeAction] Clearing session cookie.`);
           sessionCookie = await this.authEngine.clearSessionCookie(req);
         }
     }
     
     for (const key of (routeConfig.writes || [])) {
       if (finalContext.data[key]) {
-        console.log(`[RequestHandler-finalizeAction] Writing data to connector: '${key}'`);
         await this.connectorManager.getConnector(key).write(finalContext.data[key]);
         if (this.socketEngine) {
             await this.socketEngine.notifyOnWrite(key, finalContext.socketId);
@@ -158,47 +135,79 @@ class RequestHandler {
     let responsePayload = {};
     if (internalActions.redirect) {
       responsePayload.redirect = internalActions.redirect;
-      console.log(`[RequestHandler-finalizeAction] Preparing JSON response with redirect to: ${responsePayload.redirect}`);
     } else if (routeConfig.update) {
       const componentName = routeConfig.update;
       const componentConfig = this.manifest.components[componentName];
-      const requiredConnectors = componentConfig?.schema?.requires || [];
-      
-      const props = {
-        data: {},
-        globals: this.manifest.globals || {},
-        url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null),
-        // ★ НОВОЕ: Передаем пользователя в props для обновляемого компонента.
-        user: finalContext.user 
-      };
+      // ★★★ НАЧАЛО ИСПРАВЛЕНИЯ ★★★
+      // 1. Определяем ВСЕ коннекторы, которые могут понадобиться обновляемому компоненту и его дочерним элементам.
+      //    Это самая надежная стратегия.
+      const allRequiredConnectors = this._findAllRequiredConnectors(componentName);
 
-      for (const connectorName of requiredConnectors) {
+      // 2. Формируем props, включая ВСЕ эти коннекторы из финального контекста.
+      const propsData = {};
+      for (const connectorName of allRequiredConnectors) {
           if(finalContext.data[connectorName]) {
-            props.data[connectorName] = finalContext.data[connectorName];
+            propsData[connectorName] = finalContext.data[connectorName];
           }
       }
 
       responsePayload = {
         update: componentName,
-        props: props,
+        props: {
+            data: propsData, // <-- Теперь здесь полный набор данных для компонента
+            user: finalContext.user,
+            globals: this.manifest.globals || {},
+            url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
+        },
       };
-      console.log(`[RequestHandler-finalizeAction] Preparing JSON response to update component: '${componentName}'`);
-    } else {
-        console.log(`[RequestHandler-finalizeAction] Action has no redirect or update. Sending empty JSON response.`);
+      // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
     }
     
     if (res && !res.headersSent) {
       if (sessionCookie) {
-        console.log('[RequestHandler-finalizeAction] Setting session cookie in response headers.');
         res.setHeader('Set-Cookie', sessionCookie);
       }
       this._sendResponse(res, 200, responsePayload, 'application/json');
     } 
   }
 
+  // ★★★ НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ★★★
+  /**
+   * Рекурсивно находит все зависимости коннекторов для компонента и его дочерних элементов.
+   * @param {string} componentName - Имя корневого компонента для проверки.
+   * @returns {Set<string>} - Уникальный набор имен всех необходимых коннекторов.
+   */
+  _findAllRequiredConnectors(componentName) {
+    const visited = new Set();
+    const required = new Set();
+    
+    const findRecursive = (name) => {
+        if (!name || visited.has(name)) return;
+        visited.add(name);
+
+        const config = this.manifest.components[name];
+        if (!config) return;
+
+        // Добавляем зависимости самого компонента
+        (config.schema?.requires || []).forEach(conn => required.add(conn));
+        
+        // Рекурсивно проверяем зависимости вложенных компонентов (если они определены в манифесте)
+        // В нашем случае это не используется, но это хороший задел на будущее.
+        // const injectedComponents = this._getInjectedComponentsFor(name);
+        // injectedComponents.forEach(childName => findRecursive(childName));
+    };
+
+    findRecursive(componentName);
+    
+    // Добавляем 'user' по умолчанию, так как он часто нужен (например, в header).
+    required.add('user'); 
+    
+    return required;
+  }
+
+
   _findRoute(method, pathname) {
     const routes = this.manifest.routes || {};
-    // Ищем точное совпадение
     const key = `${method} ${pathname}`;
     if (routes[key]) {
       routes[key].key = key;
@@ -215,10 +224,6 @@ class RequestHandler {
         try {
           if (!body) return resolve({});
           if (req.headers['content-type']?.includes('application/json')) return resolve(JSON.parse(body));
-          // ★ ИЗМЕНЕНИЕ: Добавлена поддержка стандартного form-urlencoded, который часто используется формами.
-          if (req.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
-            return resolve(Object.fromEntries(new URLSearchParams(body)));
-          }
           resolve({});
         } catch (e) { reject(e); }
       });
@@ -228,11 +233,9 @@ class RequestHandler {
 
   _sendResponse(res, statusCode, data, contentType = 'text/plain') {
     if (res.headersSent) {
-      console.warn('[RequestHandler-sendResponse] Headers already sent, cannot send response.');
       return;
     }
     const body = (typeof data === 'object' && data !== null) ? JSON.stringify(data) : String(data);
-    console.log(`[RequestHandler-sendResponse] <-- Sending response: ${statusCode} ${contentType}`);
     res.writeHead(statusCode, { 
         'Content-Type': contentType, 
         'Content-Length': Buffer.byteLength(body) 

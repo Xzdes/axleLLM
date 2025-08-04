@@ -7,7 +7,8 @@ import ReactDOM from 'react-dom/client';
 // 1. Делаем React и ReactDOM глобально доступными для всего остального кода.
 window.React = React;
 window.ReactDOM = ReactDOM;
-window.axle = { components: {} }; // Инициализируем неймспейс для компонентов.
+// ★ ИЗМЕНЕНИЕ: Строка "window.axle = { components: {} };" УДАЛЕНА ОТСЮДА.
+// Инициализация теперь происходит в build-client.js
 
 // 2. Импортируем *только* функцию инициализации из нашего движка.
 import { initialize } from './engine-client.js';

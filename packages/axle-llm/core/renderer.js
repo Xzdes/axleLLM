@@ -17,7 +17,6 @@ class Renderer {
     try {
       delete require.cache[require.resolve(componentPath)];
       const componentModule = require(componentPath);
-      // console.log(`[Renderer-LOG] Successfully loaded component '${componentName}'`);
       return componentModule.default || componentModule;
     } catch (error) {
       console.error(`[Renderer-LOG] CRITICAL: Failed to load compiled component '${componentName}' from ${componentPath}.`);
@@ -26,30 +25,26 @@ class Renderer {
   }
 
   async renderView(routeConfig, dataContext, reqUrl) {
-    // console.log(`\n[Renderer-LOG] --- Starting renderView for layout: ${routeConfig.layout} ---`);
     const layoutName = routeConfig.layout;
     if (!layoutName) throw new Error(`[Renderer] Route config is missing 'layout' property.`);
     
     const LayoutComponent = this._loadCompiledComponent(layoutName);
     if (!LayoutComponent) return `<html><body>Error: Layout component could not be loaded.</body></html>`;
-
-    // ★ ИЗМЕНЕНИЕ: dataContext теперь содержит и данные из коннекторов, и объект user.
-    // Мы извлекаем пользователя и передаем его в props отдельно от `data`.
+    
+    // Отделяем пользователя от данных коннекторов для передачи в props
     const { user, ...connectorData } = dataContext;
     
     const props = {
-      data: connectorData, // Только данные из коннекторов
-      user: user,          // Пользователь как отдельный prop
+      data: connectorData,
+      user: user,
       globals: this.manifest.globals || {},
       url: this._getUrlContext(reqUrl),
     };
-    // console.log('[Renderer-LOG] Initial props object created:', util.inspect(props, { depth: 3, colors: true }));
 
     const injectedComponentTypes = {};
     const allComponentNames = new Set([layoutName]);
 
     if (routeConfig.inject) {
-      // console.log('[Renderer-LOG] Injecting component types:', routeConfig.inject);
       for (const placeholder in routeConfig.inject) {
         const componentName = routeConfig.inject[placeholder];
         if (componentName) {
@@ -63,17 +58,15 @@ class Renderer {
     }
     
     const finalProps = { ...props, components: injectedComponentTypes };
-    
-    const appElement = React.createElement(LayoutComponent, finalProps);
-    // console.log('[Renderer-LOG] App element created. Starting ReactDOMServer.renderToString...');
-    const appHtml = ReactDOMServer.renderToString(appElement);
-    // console.log('[Renderer-LOG] renderToString complete.');
+    const appHtml = ReactDOMServer.renderToString(React.createElement(LayoutComponent, finalProps));
     
     const renderedStyles = Array.from(allComponentNames).map(name => {
         const style = this.assetLoader.getStyleForComponent(name);
         return style ? `<style data-component-name="${name}">${style}</style>` : null;
     }).filter(Boolean).join('\n');
 
+    // ★★★ НАЧАЛО ИЗМЕНЕНИЙ ★★★
+    // Мы вставляем скрипт инициализации ПЕРЕД загрузкой основного бандла.
     const finalHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -84,10 +77,19 @@ class Renderer {
 </head>
 <body>
     <div id="root">${appHtml}</div>
-    <script>window.__INITIAL_DATA__ = ${JSON.stringify(dataContext)}</script>
+    <script>
+      // Эта строка гарантирует, что объект существует ДО загрузки бандла.
+      // Это решает ошибку "Cannot set properties of undefined (setting '...')".
+      window.axle = { components: {} };
+      
+      // Сохраняем все данные, включая пользователя, для клиента.
+      // Это понадобится для правильного обновления компонентов.
+      window.__INITIAL_DATA__ = ${JSON.stringify(dataContext)}
+    </script>
     <script src="/public/bundle.js"></script>
 </body>
 </html>`;
+    // ★★★ КОНЕЦ ИЗМЕНЕНИЙ ★★★
 
     return finalHtml;
   }
@@ -103,6 +105,7 @@ class Renderer {
 
   _getUrlContext(reqUrl) {
     if (!reqUrl) return { pathname: '/', query: {} };
+    // Используем полный URL для корректного парсинга
     const url = new URL(reqUrl.toString(), 'http://localhost');
     return { pathname: url.pathname, query: Object.fromEntries(url.searchParams) };
   }
