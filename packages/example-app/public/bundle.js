@@ -1,8 +1,3 @@
-
-var React = require('react');
-var ReactDOM = require('react-dom/client');
-window.React = React;
-window.ReactDOM = ReactDOM;
 (() => {
   var __create = Object.create;
   var __defProp = Object.defineProperty;
@@ -23594,17 +23589,19 @@ window.ReactDOM = ReactDOM;
       initializeWebSocket();
       console.log("[axle-client] Initialized successfully.");
     }
-    async function hydrateRoot() {
+    function hydrateRoot() {
       const rootElement = document.getElementById("root");
       if (!rootElement) {
         console.error('[axle-client] CRITICAL: Root element with id="root" not found. Hydration failed.');
         return;
       }
       try {
-        const React2 = await Promise.resolve(window.React);
-        const ReactDOM2 = await Promise.resolve(window.ReactDOM);
-        const App = () => React2.createElement("div", { dangerouslySetInnerHTML: { __html: rootElement.innerHTML } });
-        ReactDOM2.hydrateRoot(rootElement, React2.createElement(App, { initialData: window.__INITIAL_DATA__ }));
+        if (typeof import_react.default === "undefined" || typeof import_client.default === "undefined") {
+          console.error("[axle-client] CRITICAL: React or ReactDOM not found in bundle scope. Build process may be misconfigured.");
+          return;
+        }
+        const App = () => import_react.default.createElement("div", { dangerouslySetInnerHTML: { __html: rootElement.innerHTML } });
+        import_client.default.hydrateRoot(rootElement, import_react.default.createElement(App, { initialData: window.__INITIAL_DATA__ }));
         console.log("[axle-client] Hydration complete.");
       } catch (e) {
         console.error("[axle-client] CRITICAL: Hydration failed.", e);
@@ -23639,7 +23636,7 @@ window.ReactDOM = ReactDOM;
           throw new Error(`Request failed with status ${response.status}`);
         }
         const payload = await response.json();
-        processServerPayload(payload, targetSelector, element);
+        processServerPayload(payload, targetSelector);
       } catch (error) {
         if (error.name === "AbortError") {
           console.log("[axle-client] Fetch aborted for debouncing (this is expected).");
@@ -23778,6 +23775,5 @@ react-dom/cjs/react-dom.development.js:
    * @license Modernizr 3.0.0pre (Custom Build) | MIT
    *)
 */
+window.React = React; window.ReactDOM = ReactDOM; window.axle = { components: {} };
 //# sourceMappingURL=bundle.js.map
-
-window.axle = { components: {} };

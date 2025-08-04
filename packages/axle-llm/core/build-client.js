@@ -17,68 +17,42 @@ async function runClientBuild() {
     try {
         await fs.promises.mkdir(outDir, { recursive: true });
 
-        // Флаг, чтобы сигнал о завершении отправлялся только один раз
-        let isFirstBuild = true;
+        // ★★★ НАЧАЛО ИЗМЕНЕНИЙ: Правильная конфигурация esbuild ★★★
 
-        const buildReporterPlugin = {
-            name: 'axle-client-build-reporter',
-            setup(build) {
-                // Выполняется после каждой сборки (или пересборки в watch-режиме)
-                build.onEnd(result => {
-                    const outputPath = path.join(outDir, 'bundle.js');
-                    if (result.errors.length > 0) {
-                        // esbuild сам выведет ошибки в stderr, если logLevel не 'silent'
-                        console.error('[axle-client-build] 🚨 Client bundle build failed.');
-                        return;
-                    }
-
-                    if (fs.existsSync(outputPath)) {
-                        // --- Вставка глобальных React и ReactDOM ---
-                        let content = fs.readFileSync(outputPath, 'utf8');
-                        const prefix = `
-var React = require('react');
-var ReactDOM = require('react-dom/client');
-window.React = React;
-window.ReactDOM = ReactDOM;
-`;
-                        content += '\nwindow.axle = { components: {} };\n';
-                        fs.writeFileSync(outputPath, prefix + content);
-                        // --- Конец вставки ---
-
-                        if (isFirstBuild) {
-                            // Отправляем сигнал только при первой успешной сборке
-                            console.log('// CLIENT-BUILD-COMPLETE //');
-                            isFirstBuild = false; // Сбрасываем флаг
-                        } else {
-                            // Лог для последующих пересборок в watch-режиме
-                            console.log(`[axle-client-build] ✨ Client bundle rebuild complete.`);
-                        }
-                    }
-                });
-            },
-        };
-
+        // esbuild соберет React и ReactDOM в бандл благодаря 'inject' и 'bundle: true'.
+        // Затем опция 'footer' добавит наш код в конец бандла, который безопасно
+        // выставит уже сбандленные модули в глобальный scope.
         const buildOptions = {
             entryPoints: [entryPoint],
             outfile: path.join(outDir, 'bundle.js'),
             bundle: true,
             platform: 'browser',
-            format: 'iife',
+            format: 'iife', // Immediately-invoked Function Expression, безопасно для браузера
             sourcemap: true,
             define: { 'process.env.NODE_ENV': `"${isWatchMode ? 'development' : 'production'}"` },
             inject: [path.resolve(__dirname, 'react-shim.js')],
-            plugins: [buildReporterPlugin],
-            // Подавляем стандартные логи esbuild, так как наш плагин теперь управляет выводом
-            logLevel: 'silent', 
+            // Добавляем "подвал" к нашему бандлу. Этот JS-код выполнится в браузере.
+            // React и ReactDOM к этому моменту уже будут доступны внутри IIFE-обертки бандла.
+            footer: {
+                js: 'window.React = React; window.ReactDOM = ReactDOM; window.axle = { components: {} };',
+            },
         };
         
         if (isWatchMode) {
             const ctx = await esbuild.context(buildOptions);
             await ctx.watch();
             console.log('[axle-client-build] Watching for client file changes...');
+            // В режиме --watch сигнал о завершении будет выведен в логах при первой сборке.
+            // Мы будем слушать stdout в commands.js
         } else {
             await esbuild.build(buildOptions);
+            console.log(`[axle-client-build] ✅ Client bundle complete.`);
         }
+        
+        // Сигнал для оркестратора в commands.js
+        console.log('// CLIENT-BUILD-COMPLETE //');
+        
+        // ★★★ КОНЕЦ ИЗМЕНЕНИЙ ★★★
 
     } catch (error) {
         console.error('[axle-client-build] 🚨 Client bundle build process failed to start:', error);
@@ -86,7 +60,7 @@ window.ReactDOM = ReactDOM;
     }
 }
 
-// Вспомогательная функция для создания shim-файла
+// Вспомогательная функция для создания shim-файла, если его нет
 async function createShimFile() {
     const shimPath = path.resolve(__dirname, 'react-shim.js');
     const content = `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nexport { React, ReactDOM };`;

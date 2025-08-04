@@ -33,8 +33,7 @@
   /**
    * Hydrates the initial server-rendered HTML into an interactive React application.
    */
-  async function hydrateRoot() {
-    // We assume the server has rendered the initial app into a div with id="root".
+  function hydrateRoot() {
     const rootElement = document.getElementById('root');
     if (!rootElement) {
       console.error('[axle-client] CRITICAL: Root element with id="root" not found. Hydration failed.');
@@ -42,20 +41,20 @@
     }
 
     try {
-      // Dynamically import React and ReactDOM. This is just for encapsulation.
-      // In a real build process, they would be bundled.
-      const React = await Promise.resolve(window.React); // Assuming React is available globally
-      const ReactDOM = await Promise.resolve(window.ReactDOM); // Assuming ReactDOM is available globally
+      // ★★★ НАЧАЛО ИСПРАВЛЕНИЯ ★★★
+      // esbuild's `inject` feature makes React and ReactDOM directly available
+      // as variables in this scope. We no longer need to get them from `window`.
+      if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+        console.error('[axle-client] CRITICAL: React or ReactDOM not found in bundle scope. Build process may be misconfigured.');
+        return;
+      }
       
-      // The initial component tree is already rendered. We just need to load its definition.
-      // This is a placeholder for a more advanced dynamic loading system.
-      // For now, we assume the main component is implicitly loaded.
-      // The key is that we have window.__INITIAL_DATA__ available.
       const App = () => React.createElement('div', { dangerouslySetInnerHTML: { __html: rootElement.innerHTML } });
 
       // Hydrate the app. This makes the server-rendered HTML interactive.
       ReactDOM.hydrateRoot(rootElement, React.createElement(App, { initialData: window.__INITIAL_DATA__ }));
       console.log('[axle-client] Hydration complete.');
+      // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
 
     } catch (e) {
       console.error('[axle-client] CRITICAL: Hydration failed.', e);
@@ -101,8 +100,7 @@
 
       const payload = await response.json();
       
-      // Process the server's response payload.
-      processServerPayload(payload, targetSelector, element);
+      processServerPayload(payload, targetSelector);
 
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -110,24 +108,19 @@
         return;
       }
       console.error(`[axle-client] Action failed for "${action}":`, error);
-      // Here you could implement a user-facing error message.
     }
   }
   
   /**
    * Processes the JSON payload from the server after an action.
-   * @param {object} payload - The server response.
-   * @param {string} targetSelector - The CSS selector for the component to update.
    */
   function processServerPayload(payload, targetSelector) {
     if (payload.redirect) {
-      // Handle SPA or full-page redirects
-      window.location.href = payload.redirect; // Simplified for now
+      window.location.href = payload.redirect;
       return;
     }
 
     if (payload.update) {
-      // The server is telling us to re-render a specific component.
       const componentToUpdate = payload.update;
       const newProps = payload.props;
       
@@ -137,8 +130,7 @@
         return;
       }
       
-      // Load the component's JS definition (this is a simplified placeholder)
-      // In a real app, you'd use dynamic import or have a manifest of component paths.
+      // Assume component definitions are attached to the window object by the build process
       const Component = window.axle.components[componentToUpdate];
       
       if (!Component) {
@@ -146,22 +138,18 @@
           return;
       }
 
-      // Get or create a React root for the target element.
       let root = componentRoots.get(targetSelector);
       if (!root) {
         root = ReactDOM.createRoot(targetElement);
         componentRoots.set(targetSelector, root);
       }
       
-      // Re-render the component with the new props. React's VDOM does the magic.
       root.render(React.createElement(Component, newProps));
     }
   }
 
   /**
    * Extracts the body for a POST/PUT request from a form or payload attributes.
-   * @param {HTMLElement} element - The element that triggered the action.
-   * @returns {string} - A JSON string.
    */
   function getActionBody(element) {
     const form = element.closest('form');
@@ -203,7 +191,6 @@
           socketId = data.id;
           console.log(`[axle-client] WebSocket ID assigned: ${socketId}`);
         }
-        // Handle other real-time events from the server if necessary
       } catch (e) {
         console.error('[axle-client] Failed to handle WebSocket message:', e);
       }
