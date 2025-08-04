@@ -1,112 +1,113 @@
-# axleLLM Engine v2.2: The Symbiotic Framework
+# axleLLM Engine v3.0: The Symbiotic React Framework
 
-**axleLLM** — это декларативный движок на базе Node.js и Electron для создания нативных, кроссплатформенных десктопных приложений. Его архитектура специально спроектирована для симбиотической работы **Человека и Искусственного Интеллекта (LLM)**, смещая парадигму с написания кода на проектирование интеллектуальных, самоанализирующих систем.
+**axleLLM** is a declarative engine based on Node.js, Electron, and **React** for creating native, cross-platform desktop applications. Its architecture is specifically engineered for symbiotic collaboration between a **Human and a Large Language Model (LLM)**, shifting the development paradigm from writing imperative code to architecting intelligent, self-analyzing systems.
 
-С `axleLLM` все приложение — от источников данных и UI-компонентов до интеграции с ОС и бизнес-логики — определяется в декларативных JavaScript-файлах в папке `manifest`. Этот подход превращает LLM из простого генератора кода в полноценного **системного архитектора**, который проектирует, отлаживает и расширяет надежные и безопасные приложения.
+With `axleLLM`, the entire application—from data sources and UI components to OS integration and business logic—is defined in declarative JavaScript files within the `manifest/` directory. This approach elevates the LLM from a simple code generator to a true **System Architect** that designs, debugs, and extends robust and secure applications.
 
-*   **Репозиторий:** [https://github.com/Xzdes/axleLLM](https://github.com/Xzdes/axleLLM)
-*   **NPM Пакет:** [https://www.npmjs.com/package/axle-llm](https://www.npmjs.com/package/axle-llm)
+*   **Repository:** [https://github.com/Xzdes/axleLLM](https://github.com/Xzdes/axleLLM)
+*   **NPM Package:** [https://www.npmjs.com/package/axle-llm](https://www.npmjs.com/package/axle-llm)
 
 ---
 
-## 🚀 Быстрый старт: Ваше первое приложение за 60 секунд
+## 🚀 Quick Start: First Application in 60 Seconds
 
-Создание нового нативного десктопного приложения никогда не было таким простым. Вам понадобится только Node.js.
+Creating a new native desktop application is a deterministic, three-step process. Prerequisite: Node.js must be installed.
 
-1.  **Создайте новое приложение**
-    Откройте терминал в любой папке и выполните команду:
+1.  **Create a New Application**
+    Execute the following command in any directory:
     ```bash
     npx axle-llm new my-desktop-app
     ```
 
-2.  **Перейдите в папку и установите зависимости**
+2.  **Navigate and Install Dependencies**
     ```bash
     cd my-desktop-app
     npm install
     ```
 
-3.  **Запустите приложение в режиме разработки**
+3.  **Launch in Development Mode**
     ```bash
     npm run dev
     ```
-Вот и всё! У вас на экране появится окно вашего первого приложения с hot-reloading и встроенным валидатором архитектуры.
+Execution will complete when a native application window appears. The environment is now running with hot-reloading and a built-in architectural validator.
 
 ---
 
-## 🏛️ Структура вашего нового приложения
+## 🏛️ Project Structure Overview
 
-Команда `npx axle-llm new` создает для вас идеально организованную структуру. Ваша работа как архитектора сосредоточена всего в двух папках:
+The `npx axle-llm new` command generates a monorepo structure. All architectural work is to be performed within the `app` and `manifest` directories of the `packages/app` workspace.
 
 ```
 my-desktop-app/
 ├── app/
-│   ├── actions/      # JS-файлы для сложной, переиспользуемой логики.
-│   ├── bridge/       # Ваши собственные Node.js модули для взаимодействия с ОС.
-│   └── components/   # Все ваши HTML и CSS файлы (компоненты).
+│   ├── actions/      # Imperative JS modules for complex, reusable logic.
+│   ├── bridge/       # Custom Node.js modules for OS-level interaction.
+│   └── components/   # All React components (.jsx) and their stylesheets (.css).
 │
 ├── manifest/
-│   ├── bridge.js     # "Белый список" разрешенных нативных функций.
-│   ├── components.js # Реестр всех ваших UI-компонентов.
-│   ├── connectors.js # Описание всех источников данных.
-│   └── routes.js     # Мозг приложения: бизнес-логика и рендеринг.
+│   ├── bridge.js     # Whitelist for permitted native OS functions.
+│   ├── components.js # Registry for all UI components.
+│   ├── connectors.js # Definition of all data sources.
+│   └── routes/       # The application's core logic: views and actions.
 │
-├── manifest.js       # Корневой манифест: настройки окна, темы, глобальные переменные.
-└── package.json      # Зависимости и скрипты вашего проекта.
+├── manifest.js       # Root manifest: window settings, themes, global variables.
+└── package.json      # Project dependencies and scripts.
 ```
 
 ---
 
-## 📖 Архитектурный План: Папка `manifest`
+## 📖 Architectural Blueprint: The `manifest` Directory
 
-Папка `manifest` — это мозг и душа любого `axleLLM` приложения. Движок автоматически находит и собирает все файлы из этой директории. Вам нужно просто описывать, *что* приложение должно делать.
+The `manifest` directory is the brain of an `axleLLM` application. The engine automatically discovers and composes all files within this directory. The architect's role is to describe *what* the application does within these files.
 
-### Основные Секции
+### Core Manifest Sections
 
-| Секция | Описание |
-| :--- | :--- |
-| **`launch`** | Конфигурация главного окна приложения (в `manifest.js`). |
-| **`themes`** | Декларативная система темизации через CSS-переменные (в `manifest.js`). |
-| **`globals`** | Глобальные переменные для UI (в `manifest.js`). |
-| **`connectors`** | Декларация всех источников данных (`wise-json-db`, `in-memory`). |
-| **`components`** | Реестр UI-компонентов (HTML, CSS) и их **Схем Данных (`schema`)**. |
-| **`bridge`** | "Белый список" всех функций ОС и кастомных серверных модулей, доступных приложению. |
-| **`routes`** | Мозг приложения. Связывает URL и `action`-ы с UI и бизнес-логикой. |
+| Section      | Description                                                                 |
+| :----------- | :-------------------------------------------------------------------------- |
+| **`launch`**   | Configures the main application window (in `manifest.js`).                  |
+| **`themes`**   | A declarative theming system via CSS variables (in `manifest.js`).          |
+| **`globals`**  | Global variables accessible in UI components via `props.globals` (in `manifest.js`). |
+| **`connectors`** | Declares all data sources (`wise-json-db`, `in-memory`).                    |
+| **`components`** | Registers React components (.jsx) and defines their **Data Schemas (`schema`)**. |
+| **`bridge`**   | Whitelists all OS functions and custom server-side modules accessible to the application. |
+| **`routes`**   | The application's brain. Links URLs and `action`s to UI and business logic. |
 
-### Бизнес-логика через `steps`
+### Business Logic via `steps`
 
-Вся бизнес-логика в секции `routes` описывается как последовательный массив `steps`. Это безопасный, декларативный способ описать сложную логику.
+All business logic within the `routes` section is described as a sequential array of `steps`. This is a secure, declarative method for defining complex logic.
 
-**Доступные Шаги:**
+**Available Step Operations:**
 
-| Шаг | Описание |
-| :--- | :--- |
-| `{ "set": "path", "to": "expr" }` | Присваивает значение переменной в контексте. |
-| `{ "if": "cond", "then": [...], "else": [...] }` | Условное ветвление логики. |
-| `{ "run": "script" }` | Выполняет JS-файл из `app/actions/` для сложной логики (с побочными эффектами). |
-| `{ "run:set": "path", "handler": "script", "with": [...] }` | Выполняет "чистую функцию" из `app/actions/` и сохраняет возвращенное значение. |
-| `{ "action:run": { "name": "route" } }` | Вызывает другой `action`-роут, позволяя создавать переиспользуемые цепочки. |
-| `{ "bridge:call": { ... } }` | Вызывает функцию Нативного Моста (клиентского или серверного). |
-| `{ "try": [...], "catch": [...] }` | Позволяет перехватывать и обрабатывать ошибки. |
-| `{ "log": "msg" }` / `{ "log:value": "path" }` | **Декларативная отладка.** Выводит сообщение или значение переменной в консоль сервера. |
-| `{ "client:redirect": "'/path'" }` | SPA-навигация на стороне клиента. |
+| Step Signature                                           | Description                                                                              |
+| :------------------------------------------------------- | :--------------------------------------------------------------------------------------- |
+| `{ "set": "path.to.key", "to": "expression" }`             | Assigns a value to a variable in the execution context.                                  |
+| `{ "if": "condition", "then": [...], "else": [...] }`      | Conditional branching of the logic flow.                                                 |
+| `{ "run": "scriptName" }`                                 | Executes a JS file from `app/actions/` for complex logic (with side-effects).            |
+| `{ "run:set": "path", "handler": "script", "with": [...] }` | Executes a pure function from `app/actions/` and stores its return value.                |
+| `{ "action:run": { "name": "routeName" } }`                 | Invokes another `action` route, enabling the creation of reusable subroutines.         |
+| `{ "bridge:call": { ... } }`                               | Invokes a Native Bridge function (either Client-Side or Server-Side).                    |
+| `{ "try": [...], "catch": [...] }`                          | Enables error handling and recovery within the logic flow.                               |
+| `{ "log": "message" }` / `{ "log:value": "path" }`          | **Declarative Debugging.** Outputs a message or a variable's value to the server console. |
+| `{ "client:redirect": "'/path'" }`                         | Performs client-side SPA navigation.                                                     |
 
 ---
 
-## 🔬 Интеллектуальный Валидатор и Схемы Компонентов
+## 🔬 The Intelligent Validator and Component Schemas
 
-`axleLLM` не просто запускает ваше приложение, он сначала его **проверяет**. Встроенная система "супер-валидации" анализирует всю вашу архитектуру *до* запуска. Благодаря **Схемам Компонентов**, движок понимает "контракты данных" и предотвращает ошибки еще на этапе проектирования.
+Before launching, `axleLLM` **validates** the entire application architecture. The built-in "Super Validator" analyzes all manifest files for logical consistency. By using **Component Schemas**, the engine understands "data contracts" and prevents data-related errors at design time.
 
-*Пример схемы в `manifest/components.js`:*
+*Schema Example in `manifest/components.js`:*
 ```javascript
 "receipt": { 
-  "template": "receipt.html", 
+  "template": "receipt.jsx", // Reference to the JSX file
+  "style": "receipt.css",
   "schema": {
-    // Валидатор проверит, что любой роут, использующий этот компонент,
-    // предоставит коннектор 'receipt' в своей секции 'reads'.
+    // The validator will enforce that any route using this component
+    // must provide the 'receipt' connector in its 'reads' section.
     "requires": ["receipt"],
-    // Эта часть служит документацией для LLM
+    // This section serves as documentation for the LLM.
     "variables": {
-      "data.receipt.items": "Array<{name, price}>"
+      "props.data.receipt.items": "Array<{name, price}>"
     }
   }
 }
@@ -114,55 +115,53 @@ my-desktop-app/
 
 ---
 
-## 🏛️ Интеллектуальный Нативный Мост
+## 🏛️ The Intelligent Native Bridge
 
-Мост — это единственный, строго контролируемый канал для взаимодействия с операционной системой, защищенный "белым списком" в `manifest/bridge.js`.
+The Bridge is the single, strictly controlled channel for interacting with the operating system, secured by a whitelist in `manifest/bridge.js`.
 
-**1. Клиентский Мост (UI ОС):** Управляет диалогами, оболочкой ОС. Может быть интерактивным.
+**1. Client-Side Bridge (OS UI):** Manages dialogs and the OS shell. It can be interactive.
 
-*Пример Интерактивного Вызова:*
-```javascript
+*Interactive Call Example:*```javascript
 "steps": [
-  // 1. Остановить выполнение, показать диалог сохранения файла
+  // 1. Pause execution, show a save file dialog to the user.
   {
     "bridge:call": {
       "api": "dialogs.showSaveDialog",
-      "await": true, // <--- Ключевой флаг
+      "await": true, // <--- This flag is critical.
       "resultTo": "context.saveDialogResult"
     }
   },
-  // 2. Этот шаг выполнится только ПОСЛЕ того, как пользователь закроет диалог
+  // 2. This step will only execute AFTER the user has closed the dialog.
   { "if": "!context.saveDialogResult.canceled", "then": [ /* ... */ ] }
 ]
 ```
 
-**2. Серверный Мост (Кастомные Node.js Модули):** Интегрирует любую сложную Node.js логику (работа с файлами, оборудованием, сторонними API) из папки `app/bridge/`.
+**2. Server-Side Bridge (Custom Node.js Modules):** Integrates any complex Node.js logic (file system access, hardware interaction, third-party APIs) from the `app/bridge/` directory.
 
 ```javascript
-"bridge": {
-  "custom": { "fileUtils": "file-utils.js" }
-},
-"routes": {
-  "POST /save-file": {
-    "type": "action",
-    "steps": [{
-      "bridge:call": {
-        "api": "custom.fileUtils.saveTextFile",
-        "args": "['./report.txt', body.text]"
-      }
-    }]
-  }
+// manifest/bridge.js
+"custom": { "fileUtils": "file-utils.js" },
+
+// manifest/routes/some.routes.js
+"POST /save-file": {
+  "type": "action",
+  "steps": [{
+    "bridge:call": {
+      "api": "custom.fileUtils.saveTextFile",
+      "args": "['./report.txt', body.text]"
+    }
+  }]
 }
 ```
 
 ---
 
-## 🔮 Будущие Направления
+## 🔮 Future Roadmap
 
-Проект активно развивается. Планы включают:
-*   [ ] Расширение API Нативного Моста: поддержка принтеров, системного трея и т.д.
-*   [ ] Интерактивный CLI: команды `axle-cli generate component ...`.
-*   [ ] Система автоматического обновления.
-*   [ ] Выделенный сайт с полной документацией и примерами.
+The project is under active development. The roadmap includes:
+*   [ ] Expanded Native Bridge API: system tray, etc.
+*   [ ] Interactive CLI: `axle-cli generate component ...` commands.
+*   [ ] Auto-update system.
+*   [ ] Dedicated documentation website with tutorials and examples.
 
-Этот проект — эксперимент в области будущего совместной работы человека и ИИ для создания надежных и предсказуемых программных систем. Вклад и идеи приветствуются.
+This project is an experiment in the future of human-AI collaboration for creating robust and predictable software systems. Contributions and ideas are welcome.

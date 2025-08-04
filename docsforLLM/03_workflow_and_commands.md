@@ -13,11 +13,11 @@ All tasks, features, and modifications must follow this strict, sequential workf
 2.  **Plan Manifest Changes:** Determine which manifest files within `packages/app/manifest/` are affected.
     *   **Data Requirement:** Plan changes in `packages/app/manifest/connectors.js`.
     *   **UI Requirement:** Plan changes in `packages/app/manifest/components.js`.
-    *   **Business Logic Requirement:** Plan changes in `packages/app/manifest/routes.js`.
+    *   **Business Logic Requirement:** Plan changes in `packages/app/manifest/routes/`.
     *   **Native OS Interaction Requirement:** Plan changes in `packages/app/manifest/bridge.js`.
 
-3.  **Create/Modify Helper Files:** If the architecture requires them, create the necessary atomic files inside `packages/app/app/`.
-    *   UI templates (`.html`, `.css`) go into `packages/app/app/components/`.
+3.  **Create/Modify Asset Files:** If the architecture requires them, create the necessary atomic files inside `packages/app/app/`.
+    *   React components (`.jsx`) and their styles (`.css`) go into `packages/app/app/components/`.
     *   Complex, pure functions (`run:set`) or imperative scripts (`run`) go into `packages/app/app/actions/`.
     *   Custom Node.js modules for native OS access (`bridge:call`) go into `packages/app/app/bridge/`.
 
@@ -40,12 +40,17 @@ These are standard architectural patterns for common tasks.
 ### Task: Add a New View (e.g., "Settings Page")
 
 1.  **Create Component File:**
-    Create `packages/app/app/components/settings-page.html`.
-    ```html
-    <div id="settingsPage-container">
-      <h2>Settings</h2>
-      <p>Username: {{ data.userSettings.name }}</p>
-    </div>
+    Create `packages/app/app/components/settings-page.jsx`.
+    ```jsx
+    import React from 'react';
+    export default function SettingsPage({ data }) {
+      return (
+        <div>
+          <h2>Settings</h2>
+          <p>Username: {data.userSettings.name}</p>
+        </div>
+      );
+    }
     ```
 
 2.  **Define Connector:**
@@ -58,21 +63,21 @@ These are standard architectural patterns for common tasks.
     ```
 
 3.  **Register Component & Schema:**
-    In `packages/app/manifest/components.js`, register the component.
+    In `packages/app/manifest/components.js`, register the new component.
     ```javascript
     "settingsPage": {
-      "template": "settings-page.html",
+      "template": "settings-page.jsx",
       "schema": { "requires": ["userSettings"] }
     }
     ```
 
 4.  **Create View Route:**
-    In `packages/app/manifest/routes.js`, create the `view` route.
+    In a file inside `packages/app/manifest/routes/`, create the `view` route.
     ```javascript
     "GET /settings": {
       "type": "view",
       "layout": "mainLayout",
-      "reads": ["userSettings"],
+      "reads": ["user", "userSettings"], // Add 'user' if the layout requires it
       "inject": {
         "pageContent": "settingsPage"
       }
@@ -84,22 +89,23 @@ These are standard architectural patterns for common tasks.
 ### Task: Add a New Feature (e.g., "Change Username")
 
 1.  **Add UI Element:**
-    In `packages/app/app/components/settings-page.html`, add a form.
-    ```html
-    <form atom-action="POST /action/change-username" atom-target="#settingsPage-container">
-      <input name="newName" placeholder="New username">
+    In `packages/app/app/components/settings-page.jsx`, add a form.
+    ```jsx
+    // ... inside the component
+    <form atom-action="POST /action/change-username" atom-target="#pageContent-container">
+      <input name="newName" defaultValue={data.userSettings.name} />
       <button type="submit">Save</button>
     </form>
     ```
 
 2.  **Create Action Route:**
-    In `packages/app/manifest/routes.js`, define the business logic.
+    In a file inside `packages/app/manifest/routes/`, define the business logic.
     ```javascript
     "POST /action/change-username": {
       "type": "action",
       "reads": ["userSettings"],
       "writes": ["userSettings"],
-      "update": "settingsPage",
+      "update": "settingsPage", // The component to re-render
       "steps": [
         { "set": "data.userSettings.name", "to": "body.newName" }
       ]
@@ -113,25 +119,33 @@ These are standard architectural patterns for common tasks.
 1.  **Create Helper Function:**
     Create a pure function in `packages/app/app/actions/generateReport.js`.
     ```javascript
-    module.exports = (settings) => { /* ... */ };
+    module.exports = (settings) => {
+      // Complex logic to generate a string report...
+      return `Report based on theme: ${settings.theme}`;
+    };
     ```
 
 2.  **Create Server Bridge Module:**
     Create a Node.js module in `packages/app/app/bridge/fileSaver.js`.
     ```javascript
     const fs = require('fs/promises');
-    module.exports = { /* ... */ };
+    module.exports = {
+      save: async (filePath, content) => {
+        await fs.writeFile(filePath, content, 'utf-8');
+        return { success: true };
+      }
+    };
     ```
 
 3.  **Whitelist Native Functions:**
-    In `packages/app/manifest/bridge.js`, whitelist the functions.
+    In `packages/app/manifest/bridge.js`, whitelist all required functions.
     ```javascript
     "dialogs": { "showSaveDialog": true },
     "custom": { "fileSaver": "fileSaver.js" }
     ```
 
 4.  **Create Orchestrating `action` Route:**
-    In `packages/app/manifest/routes.js`, create the `action`.
+    In a file inside `packages/app/manifest/routes/`, create the `action`.
     ```javascript
     "POST /action/generate-report": {
       "type": "action",
@@ -150,13 +164,13 @@ These are standard architectural patterns for common tasks.
 
 ## 3. Command Reference
 
-All commands must be executed from the **monorepo root** of your application (e.g., `my-app/`), not from within the `packages/app/` directory.
+All commands must be executed from the **monorepo root** of your application (e.g., `my-app/`).
 
 -   **`npm run dev`**
-    Use this for all development. It runs the Super Validator, then launches your application with hot-reloading.
+    Use this for all development. It runs the Super Validator, then launches your application with hot-reloading for both manifest files and React components.
 
 -   **`npm run start`**
-    Runs the application in production mode.
+    Runs the application in production mode. This requires a manual build step first.
 
 -   **`npm run package`**
     Packages your application into a distributable file (e.g., `.exe`, `.dmg`).

@@ -1,59 +1,154 @@
-# AxleLLM Engine: The Symbiotic Framework
+# axleLLM Engine v3.0: The Symbiotic React Framework
 
-**AxleLLM** is a declarative Node.js and Electron-based engine for creating native, cross-platform desktop applications. Its architecture is specifically designed for symbiotic collaboration between a **Human and a Large Language Model (LLM)**, shifting the development paradigm from writing imperative code to architecting intelligent, self-analyzing systems.
+**axleLLM** is a declarative engine based on Node.js, Electron, and **React** for creating native, cross-platform desktop applications. Its architecture is specifically engineered for symbiotic collaboration between a **Human and a Large Language Model (LLM)**, shifting the development paradigm from writing imperative code to architecting intelligent, self-analyzing systems.
 
-With AxleLLM, the entire application—from data sources and UI components to OS integration and business logic—is defined in a set of declarative JavaScript files located in the `manifest/` directory. This approach elevates the LLM from a simple code generator to a true **System Architect** that designs, debugs, and extends robust, secure applications.
+With `axleLLM`, the entire application—from data sources and UI components to OS integration and business logic—is defined in declarative JavaScript files within the `manifest/` directory. This approach elevates the LLM from a simple code generator to a true **System Architect** that designs, debugs, and extends robust and secure applications.
 
-- **NPM Package:** [https://www.npmjs.com/package/axle-llm](https://www.npmjs.com/package/axle-llm)
-- **Repository:** [https://github.com/Xzdes/axleLLM](https://github.com/Xzdes/axleLLM)
+*   **Repository:** [https://github.com/Xzdes/axleLLM](https://github.com/Xzdes/axleLLM)
+*   **NPM Package:** [https://www.npmjs.com/package/axle-llm](https://www.npmjs.com/package/axle-llm)
 
 ---
 
-## 🚀 Quick Start: Your First App in 60 Seconds
+## 🚀 Quick Start: First Application in 60 Seconds
 
-Creating a native desktop application has never been this straightforward. All you need is Node.js installed.
+Creating a new native desktop application is a deterministic, three-step process. Prerequisite: Node.js must be installed.
 
 1.  **Create a New Application**
-    Open your terminal in any directory and run the following command. The `npx` command will download and execute the AxleLLM CLI to generate a new project for you.
+    Execute the following command in any directory:
     ```bash
     npx axle-llm new my-desktop-app
     ```
 
 2.  **Navigate and Install Dependencies**
-    Change into the newly created directory and install the necessary project dependencies.
     ```bash
     cd my-desktop-app
     npm install
     ```
 
 3.  **Launch in Development Mode**
-    Start the application. The engine will first validate your entire architecture and then launch the app window.
     ```bash
     npm run dev
     ```
-
-That's it! A desktop application window will appear on your screen. The project is now running with hot-reloading, so any changes you make to the files will be reflected in real-time.
-
----
-
-## 🏛️ Core Concepts
-
-To work effectively with AxleLLM, you must understand these core principles:
-
--   **Your Role is System Architect:** You do not write application code in the traditional sense. You define the system's structure, data flows, and behavior in the `manifest/` directory.
-
--   **Declarative, Not Imperative:** You describe *what* the application should do, not *how* it should do it. The AxleLLM engine handles the implementation details.
-
--   **The `manifest/` Directory is the Source of Truth:** This directory contains the complete and authoritative definition of your application. All architectural work happens here.
-
--   **Safety Through Whitelisting:** The application is sandboxed by default. All interactions with the operating system (like accessing files or showing dialogs) must be explicitly permitted in `manifest/bridge.js`.
+Execution will complete when a native application window appears. The environment is now running with hot-reloading and a built-in architectural validator.
 
 ---
 
-## 📖 Next Steps
+## 🏛️ Project Structure Overview
 
-This document provides the quickest path to getting started. To fully understand the capabilities of the AxleLLM engine, proceed to the other documentation files:
+The `npx axle-llm new` command generates a monorepo structure. All architectural work is to be performed within the `app` and `manifest` directories of the `packages/app` workspace.
 
--   **`01_Architecture_and_Project_Structure.md`:** A detailed overview of the core philosophy, the structure of a generated project, and the high-level data flow.
--   **`02_Manifest_Deep_Dive.md`:** The complete API reference for all manifest files (`connectors.js`, `components.js`, `routes.js`, `bridge.js`).
--   **`03_Workflow_and_Commands.md`:** A practical guide with step-by-step instructions and patterns for common development tasks.
+```
+my-desktop-app/
+├── app/
+│   ├── actions/      # Imperative JS modules for complex, reusable logic.
+│   ├── bridge/       # Custom Node.js modules for OS-level interaction.
+│   └── components/   # All React components (.jsx) and their stylesheets (.css).
+│
+├── manifest/
+│   ├── bridge.js     # Whitelist for permitted native OS functions.
+│   ├── components.js # Registry for all UI components.
+│   ├── connectors.js # Definition of all data sources.
+│   └── routes/       # The application's core logic: views and actions.
+│
+├── manifest.js       # Root manifest: window settings, themes, global variables.
+└── package.json      # Project dependencies and scripts.
+```
+
+---
+
+## 📖 Architectural Blueprint: The `manifest` Directory
+
+The `manifest` directory is the brain of an `axleLLM` application. The engine automatically discovers and composes all files within this directory. The architect's role is to describe *what* the application does within these files.
+
+### Core Manifest Sections
+
+| Section      | Description                                                                 |
+| :----------- | :-------------------------------------------------------------------------- |
+| **`launch`**   | Configures the main application window (in `manifest.js`).                  |
+| **`themes`**   | A declarative theming system via CSS variables (in `manifest.js`).          |
+| **`globals`**  | Global variables accessible in UI components via `props.globals` (in `manifest.js`). |
+| **`connectors`** | Declares all data sources (`wise-json-db`, `in-memory`).                    |
+| **`components`** | Registers React components (.jsx) and defines their **Data Schemas (`schema`)**. |
+| **`bridge`**   | Whitelists all OS functions and custom server-side modules accessible to the application. |
+| **`routes`**   | The application's brain. Links URLs and `action`s to UI and business logic. |
+
+### Business Logic via `steps`
+
+All business logic within the `routes` section is described as a sequential array of `steps`. This is a secure, declarative method for defining complex logic.
+
+**Available Step Operations:**
+
+| Step Signature                                           | Description                                                                              |
+| :------------------------------------------------------- | :--------------------------------------------------------------------------------------- |
+| `{ "set": "path.to.key", "to": "expression" }`             | Assigns a value to a variable in the execution context.                                  |
+| `{ "if": "condition", "then": [...], "else": [...] }`      | Conditional branching of the logic flow.                                                 |
+| `{ "run": "scriptName" }`                                 | Executes a JS file from `app/actions/` for complex logic (with side-effects).            |
+| `{ "run:set": "path", "handler": "script", "with": [...] }` | Executes a pure function from `app/actions/` and stores its return value.                |
+| `{ "action:run": { "name": "routeName" } }`                 | Invokes another `action` route, enabling the creation of reusable subroutines.         |
+| `{ "bridge:call": { ... } }`                               | Invokes a Native Bridge function (either Client-Side or Server-Side).                    |
+| `{ "try": [...], "catch": [...] }`                          | Enables error handling and recovery within the logic flow.                               |
+| `{ "log": "message" }` / `{ "log:value": "path" }`          | **Declarative Debugging.** Outputs a message or a variable's value to the server console. |
+| `{ "client:redirect": "'/path'" }`                         | Performs client-side SPA navigation.                                                     |
+
+---
+
+## 🔬 The Intelligent Validator and Component Schemas
+
+Before launching, `axleLLM` **validates** the entire application architecture. The built-in "Super Validator" analyzes all manifest files for logical consistency. By using **Component Schemas**, the engine understands "data contracts" and prevents data-related errors at design time.
+
+*Schema Example in `manifest/components.js`:*
+```javascript
+"receipt": { 
+  "template": "receipt.jsx", // Reference to the JSX file
+  "style": "receipt.css",
+  "schema": {
+    // The validator will enforce that any route using this component
+    // must provide the 'receipt' connector in its 'reads' section.
+    "requires": ["receipt"],
+    // This section serves as documentation for the LLM.
+    "variables": {
+      "props.data.receipt.items": "Array<{name, price}>"
+    }
+  }
+}
+```
+
+---
+
+## 🏛️ The Intelligent Native Bridge
+
+The Bridge is the single, strictly controlled channel for interacting with the operating system, secured by a whitelist in `manifest/bridge.js`.
+
+**1. Client-Side Bridge (OS UI):** Manages dialogs and the OS shell. It can be interactive.
+
+*Interactive Call Example:*```javascript
+"steps": [
+  // 1. Pause execution, show a save file dialog to the user.
+  {
+    "bridge:call": {
+      "api": "dialogs.showSaveDialog",
+      "await": true, // <--- This flag is critical.
+      "resultTo": "context.saveDialogResult"
+    }
+  },
+  // 2. This step will only execute AFTER the user has closed the dialog.
+  { "if": "!context.saveDialogResult.canceled", "then": [ /* ... */ ] }
+]
+```
+
+**2. Server-Side Bridge (Custom Node.js Modules):** Integrates any complex Node.js logic (file system access, hardware interaction, third-party APIs) from the `app/bridge/` directory.
+
+```javascript
+// manifest/bridge.js
+"custom": { "fileUtils": "file-utils.js" },
+
+// manifest/routes/some.routes.js
+"POST /save-file": {
+  "type": "action",
+  "steps": [{
+    "bridge:call": {
+      "api": "custom.fileUtils.saveTextFile",
+      "args": "['./report.txt', body.text]"
+    }
+  }]
+}
