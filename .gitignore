@@ -49,7 +49,7 @@ npm-shrinkwrap.json
 /packages/example-app/axle-db-data/
 
 
-/packages/example-app/public/
+/packages/example-app/public/bundle.js
 
 # Временные файлы тестов (если появятся)
 /tests/_temp/
