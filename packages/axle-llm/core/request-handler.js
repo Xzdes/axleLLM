@@ -26,9 +26,7 @@ class RequestHandler {
     console.log('[RequestHandler] Initialized successfully.');
   }
 
-  setSocketEngine(socketEngine) {
-    this.socketEngine = socketEngine;
-  }
+  setSocketEngine(socketEngine) { this.socketEngine = socketEngine; }
   
   async handle(req, res) {
     try {
@@ -40,29 +38,19 @@ class RequestHandler {
         try {
           const scriptContent = fs.readFileSync(bundlePath, 'utf-8');
           this._sendResponse(res, 200, scriptContent, 'application/javascript');
-        } catch (e) {
-            this._sendResponse(res, 404, 'Client bundle not found.');
-        }
+        } catch (e) { this._sendResponse(res, 404, 'Client bundle not found.'); }
         return;
       }
 
       const routeConfig = this._findRoute(req.method, url.pathname);
-      if (!routeConfig) { 
-        return this._sendResponse(res, 404, 'Not Found'); 
-      }
+      if (!routeConfig) { return this._sendResponse(res, 404, 'Not Found'); }
       
       const user = this.authEngine ? await this.authEngine.getUserFromRequest(req) : null;
       
       if (routeConfig.auth?.required && !user) {
         const redirectUrl = routeConfig.auth.failureRedirect || '/login';
-        if (routeConfig.type === 'view') {
-          this.authEngine.redirect(res, redirectUrl);
-          return;
-        }
-        if (routeConfig.type === 'action') {
-          this._sendResponse(res, 200, { redirect: redirectUrl }, 'application/json');
-          return;
-        }
+        if (routeConfig.type === 'view') { this.authEngine.redirect(res, redirectUrl); return; }
+        if (routeConfig.type === 'action') { this._sendResponse(res, 200, { redirect: redirectUrl }, 'application/json'); return; }
       }
       
       if (routeConfig.type === 'view') {
@@ -78,9 +66,7 @@ class RequestHandler {
       }
     } catch (error) {
       console.error(`[RequestHandler] CRITICAL ERROR processing request ${req.method} ${req.url}:`, error);
-      if (res && !res.headersSent) { 
-        this._sendResponse(res, 500, 'Internal Server Error'); 
-      }
+      if (res && !res.headersSent) { this._sendResponse(res, 500, 'Internal Server Error'); }
     }
   }
   
@@ -95,16 +81,39 @@ class RequestHandler {
     try {
         await engine.run(routeConfig.steps || []);
     } catch (engineError) {
-        if (res && !res.headersSent) {
-            this._sendResponse(res, 500, { error: 'Action execution failed', details: engineError.message }, 'application/json');
-        }
+        console.error(`[RequestHandler] Action engine failed for route '${context.routeName}':`, engineError);
+        if (res && !res.headersSent) this._sendResponse(res, 500, { error: 'Action execution failed', details: engineError.message }, 'application/json');
         return;
     }
     
-    if (routeConfig.internal) {
-      return { data: engine.context.data };
+    const finalContext = engine.context;
+    const internalActions = finalContext._internal || {};
+
+    // ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ: ПЕРЕПИСЫВАЕМ ЛОГИКУ "ПРОДОЛЖЕНИЯ" ★★★
+    if (internalActions.awaitingBridgeCall) {
+        const continuation = async (resultFromClient) => {
+            console.log(`[RequestHandler] Continuing action '${context.routeName}' after awaitable call.`);
+            
+            const { resultTo, step } = internalActions.awaitingBridgeCall;
+            if (resultTo) {
+                engine._setValue(resultTo, resultFromClient);
+            }
+            
+            // "Снимаем с паузы" и готовимся к продолжению
+            engine.context._internal.interrupt = false;
+            engine.context._internal.resumingFrom = step; // Указываем, с какого шага продолжить
+
+            await engine.run(routeConfig.steps || []);
+            
+            await this._finalizeAction(engine, routeConfig, req, res);
+        };
+        
+        const httpResponsePayload = await this.socketEngine.registerContinuation(finalContext.socketId, internalActions.awaitingBridgeCall.details, continuation);
+        this._sendResponse(res, 200, httpResponsePayload, 'application/json');
+        return;
     }
     
+    if (routeConfig.internal) { return { data: engine.context.data }; }
     await this._finalizeAction(engine, routeConfig, req, res);
   }
 
@@ -129,39 +138,18 @@ class RequestHandler {
     if (internalActions.redirect) {
       responsePayload.redirect = internalActions.redirect;
     } else if (routeConfig.update) {
-      const componentName = routeConfig.update;
-      const parentViewRoute = this._findParentViewRouteForComponent(componentName);
-      
+      const parentViewRoute = this._findParentViewRouteForComponent(routeConfig.update);
       if (parentViewRoute) {
-        const allRequiredConnectors = parentViewRoute.reads || [];
-        const completeDataForView = {};
-        for (const connectorName of allRequiredConnectors) {
-          if (finalContext.data[connectorName]) {
-            completeDataForView[connectorName] = finalContext.data[connectorName];
-          } else {
-            const connector = this.connectorManager.getConnector(connectorName);
-            if (connector) {
-              completeDataForView[connectorName] = await connector.read();
-            }
-          }
-        }
-        responsePayload.update = componentName;
+        const data = await this.connectorManager.getContext(parentViewRoute.reads || []);
+        responsePayload.update = routeConfig.update;
         responsePayload.props = {
-          data: completeDataForView,
-          user: finalContext.user,
-          globals: this.manifest.globals || {},
+          data, user: finalContext.user, globals: this.manifest.globals || {},
           url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
         };
       }
     }
     
-    // ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: ДОБАВЛЯЕМ ПЕРЕДАЧУ КОМАНД МОСТА ★★★
-    // После всех остальных операций, мы проверяем, не оставил ли ActionEngine
-    // команду на вызов функции моста.
-    if (internalActions.bridgeCalls && internalActions.bridgeCalls.length > 0) {
-        responsePayload.bridgeCalls = internalActions.bridgeCalls;
-    }
-
+    if (internalActions.bridgeCalls) { responsePayload.bridgeCalls = internalActions.bridgeCalls; }
     if (res && !res.headersSent) {
       if (sessionCookie) res.setHeader('Set-Cookie', sessionCookie);
       this._sendResponse(res, 200, responsePayload, 'application/json');
@@ -170,13 +158,10 @@ class RequestHandler {
 
   _findParentViewRouteForComponent(componentName) {
     for (const key in this.manifest.routes) {
-        const route = this.manifest.routes[key];
-        if (route.type === 'view') {
-            const allComponentsInView = [route.layout, ...Object.values(route.inject || {})];
-            if (allComponentsInView.includes(componentName)) {
-                return route;
-            }
-        }
+      const route = this.manifest.routes[key];
+      if (route.type === 'view') {
+        if ([route.layout, ...Object.values(route.inject || {})].includes(componentName)) return route;
+      }
     }
     return null;
   }
@@ -194,24 +179,15 @@ class RequestHandler {
     return new Promise((resolve, reject) => {
       let body = '';
       req.on('data', chunk => { body += chunk.toString(); });
-      req.on('end', () => {
-        try {
-          resolve(body ? JSON.parse(body) : {});
-        } catch (e) { reject(e); }
-      });
+      req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch (e) { reject(e); } });
       req.on('error', err => reject(err));
     });
   }
 
   _sendResponse(res, statusCode, data, contentType = 'text/plain') {
-    if (res.headersSent) {
-      return;
-    }
+    if (res.headersSent) return;
     const body = (typeof data === 'object' && data !== null) ? JSON.stringify(data) : String(data);
-    res.writeHead(statusCode, { 
-        'Content-Type': contentType, 
-        'Content-Length': Buffer.byteLength(body) 
-    }).end(body);
+    res.writeHead(statusCode, { 'Content-Type': contentType, 'Content-Length': Buffer.byteLength(body) }).end(body);
   }
 }
 

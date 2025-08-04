@@ -93,7 +93,7 @@ async function executeAction(element, triggerType) {
     }
     
     const payload = await response.json();
-    processServerPayload(payload, targetSelector);
+    await processServerPayload(payload, targetSelector);
 
   } catch (error) {
     if (error.name !== 'AbortError') {
@@ -105,18 +105,32 @@ async function executeAction(element, triggerType) {
 /**
  * Обрабатывает ответ от сервера для обновления UI.
  */
-function processServerPayload(payload, targetSelector) {
-  // ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: ОБРАБАТЫВАЕМ КОМАНДЫ МОСТА ★★★
-  // Первым делом проверяем, не прислал ли сервер команду на вызов функции моста.
+async function processServerPayload(payload, targetSelector) {
   if (payload.bridgeCalls) {
-    // Проверяем, что мост вообще доступен
     if (window.axleBridge && typeof window.axleBridge.call === 'function') {
-      payload.bridgeCalls.forEach(call => {
-        console.log(`[axle-client] Executing bridge call: ${call.api}`, call.args);
-        window.axleBridge.call(call.api, call.args);
-      });
+      payload.bridgeCalls.forEach(call => window.axleBridge.call(call.api, call.args));
     } else {
-      console.error('[axle-client] Received bridge call command, but `window.axleBridge` is not available.');
+      console.error('[axle-client] Received bridge call, but `window.axleBridge` is not available.');
+    }
+  }
+
+  // ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ: ОБРАБАТЫВАЕМ ОЖИДАЮЩИЕ ВЫЗОВЫ ★★★
+  if (payload.awaitingBridgeCall) {
+    const { callId, api, args } = payload.awaitingBridgeCall;
+    console.log(`[axle-client] Awaiting bridge call '${api}' with ID: ${callId}`);
+    try {
+      const result = await window.axleBridge.call(api, args);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'bridge_call_response',
+          payload: { callId, result }
+        }));
+      }
+    } catch (error) {
+       console.error(`[axle-client] Awaitable bridge call failed:`, error);
+       if (ws && ws.readyState === WebSocket.OPEN) {
+         ws.send(JSON.stringify({ type: 'bridge_call_response', payload: { callId, error: error.message } }));
+       }
     }
   }
 
@@ -127,29 +141,23 @@ function processServerPayload(payload, targetSelector) {
 
   if (payload.update) {
     const { update: componentName, props } = payload;
-
     if (!props || !props.data) {
       return console.error(`[axle-client] Invalid payload for update on "${componentName}": 'props.data' is missing.`);
     }
-    
     const Component = window.axle.components[componentName];
     if (!Component) {
-      return console.error(`[axle-client] Component definition for '${componentName}' not found in window.axle.components.`);
+      return console.error(`[axle-client] Component definition for '${componentName}' not found.`);
     }
-    
     const targetElement = document.querySelector(targetSelector);
     if (!targetElement) {
-      return console.error(`[axle-client] Target element "${targetSelector}" for component "${componentName}" not found.`);
+      return console.error(`[axle-client] Target element "${targetSelector}" not found.`);
     }
-
     window.__INITIAL_DATA__ = props.data;
-
     let root = componentRoots.get(targetSelector);
     if (!root) {
       root = window.ReactDOM.createRoot(targetElement);
       componentRoots.set(targetSelector, root);
     }
-    
     root.render(window.React.createElement(Component, props));
   }
 }
@@ -227,7 +235,6 @@ function scanAndSubscribeToSockets() {
     if (channel && !activeSocketSubscriptions.has(channel)) {
       activeSocketSubscriptions.add(channel);
       ws.send(JSON.stringify({ type: 'subscribe', channel }));
-      console.log(`[axle-client] Subscribing to WebSocket channel: '${channel}'`);
     }
   });
 }
