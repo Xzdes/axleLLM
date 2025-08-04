@@ -1,14 +1,34 @@
-// packages/axle-llm/client/index.js
+// packages/axle-llm/index.js
 
-// This is the new main entry point for the client bundle.
-// It ensures React is bundled and exposed globally before the engine runs.
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+// 1. Импортирует функции из ваших основных модулей
+const { runDev, runStart, runPackage } = require('./core/commands');
+const { createServerInstance } = require('./core/server'); // В вашем коде может быть startServer, суть та же
+const { loadManifest } = require('./core/config-loader');
 
-// Make React and ReactDOM globally available for the engine and components.
-window.React = React;
-window.ReactDOM = ReactDOM;
-window.axle = { components: {} }; // Initialize the component namespace.
+/**
+ * Эта функция предназначена в основном для тестов.
+ * Она позволяет запустить ТОЛЬКО серверную часть вашего приложения
+ * (HTTP-сервер, коннекторы, рендерер) без запуска окна Electron.
+ */
+async function createServer(appPath, options = {}) {
+    // Эта проверка — ключевая. Код внутри выполнится, только если
+    // переменная окружения установлена в 'test'.
+    if (process.env.NODE_ENV === 'test') {
+        const manifest = loadManifest(appPath);
+        // Запускает сервер и возвращает его экземпляр, чтобы
+        // тестовый скрипт мог отправлять на него запросы.
+        const { httpServer } = await createServerInstance(appPath, manifest, options);
+        return { server: httpServer };
+    }
+    
+    // В обычном режиме эта функция ничего не делает.
+    console.log("createServer is intended for testing purposes in the current setup.");
+}
 
-// Now that globals are set, run the actual engine logic.
-import './engine-client.js';
+// 2. Экспортирует (делает публичными) эти функции
+module.exports = {
+    createServer,
+    runDev,
+    runStart,
+    runPackage
+};

@@ -6,7 +6,7 @@ const fs = require('fs');
 const appPath = process.cwd();
 const componentsDir = path.join(appPath, 'app', 'components');
 const serverOutDir = path.join(appPath, '.axle-build');
-const clientOutDir = path.join(appPath, '.axle-build-client');
+const clientOutDir = path.join(appPath, '.axle-build-client'); 
 
 function findFilesByExtension(startPath, extension) {
     if (!fs.existsSync(startPath)) return [];
@@ -27,7 +27,6 @@ function findFilesByExtension(startPath, extension) {
 async function runBuild() {
     console.log('[axle-build] Starting unified build (server & client components)...');
     try {
-        // Очистка и создание директорий
         await Promise.all([
             fs.promises.rm(serverOutDir, { recursive: true, force: true }),
             fs.promises.rm(clientOutDir, { recursive: true, force: true })
@@ -40,37 +39,23 @@ async function runBuild() {
         const entryPoints = findFilesByExtension(componentsDir, '.jsx');
         if (entryPoints.length === 0) {
             console.log('[axle-build] No .jsx components found.');
-            console.log('// BUILD-COMPLETE //'); // Сигнал даже если нет компонентов
+            console.log('// BUILD-COMPLETE //');
             return;
         }
 
         const isWatchMode = process.argv.includes('--watch');
 
-        // Общий плагин для логирования и отправки сигнала
-        const buildReporterPlugin = (buildType) => ({
-            name: `axle-${buildType}-reporter`,
-            setup(build) {
-                let isFirstBuild = true;
-                build.onEnd(result => {
-                    if (result.errors.length > 0) {
-                        console.error(`[axle-build] 🚨 ${buildType} build failed.`);
-                    } else {
-                        if (isFirstBuild) {
-                            console.log(`[axle-build] ✅ Initial ${buildType} build complete. ${entryPoints.length} component(s) compiled.`);
-                            // Сигнал отправляется только после серверной сборки
-                            if (buildType === 'Server') {
-                                console.log('// BUILD-COMPLETE //');
-                            }
-                            isFirstBuild = false;
-                        } else {
-                            console.log(`[axle-build] ✨ ${buildType} rebuild complete.`);
-                        }
-                    }
-                });
-            },
-        });
+        let serverBuildDone = false;
+        let clientBuildDone = false;
+        let initialBuildSignaled = false;
 
-        // Конфигурация для СЕРВЕРА
+        const signalIfReady = () => {
+            if (serverBuildDone && clientBuildDone && !initialBuildSignaled) {
+                console.log('// BUILD-COMPLETE //');
+                initialBuildSignaled = true;
+            }
+        }
+
         const serverOptions = {
             entryPoints,
             outdir: serverOutDir,
@@ -79,24 +64,51 @@ async function runBuild() {
             jsx: 'transform',
             jsxFactory: 'React.createElement',
             jsxFragment: 'React.Fragment',
-            logLevel: 'silent',
-            plugins: [buildReporterPlugin('Server')]
+            plugins: [{
+                name: 'server-reporter',
+                setup(build) {
+                    build.onEnd(result => {
+                        if (result.errors.length === 0) {
+                           console.log(`[axle-build] ✅ Server components build complete.`);
+                           if(!isWatchMode || !serverBuildDone) {
+                                serverBuildDone = true;
+                                signalIfReady();
+                           }
+                        } else {
+                            console.error('[axle-build] 🚨 Server components build failed.');
+                        }
+                    });
+                },
+            }],
         };
-        
-        // Конфигурация для КЛИЕНТА
+
         const clientOptions = {
             entryPoints,
             outdir: clientOutDir,
-            bundle: true, // Бандлим зависимости
+            bundle: true,
             platform: 'browser',
             format: 'iife',
             globalName: 'axleComponent',
             jsx: 'transform',
             jsxFactory: 'React.createElement',
             jsxFragment: 'React.Fragment',
-            external: ['react', 'react-dom'], // React/ReactDOM будут в window
-            logLevel: 'silent',
-            plugins: [buildReporterPlugin('Client')]
+            external: ['react', 'react-dom'],
+            plugins: [{
+                name: 'client-reporter',
+                setup(build) {
+                     build.onEnd(result => {
+                        if (result.errors.length === 0) {
+                            console.log(`[axle-build] ✅ Client components build complete.`);
+                            if(!isWatchMode || !clientBuildDone) {
+                                clientBuildDone = true;
+                                signalIfReady();
+                           }
+                        } else {
+                            console.error('[axle-build] 🚨 Client components build failed.');
+                        }
+                    });
+                },
+            }],
         };
 
         if (isWatchMode) {

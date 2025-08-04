@@ -48,13 +48,16 @@ npm-shrinkwrap.json
 # Нельзя коммитить данные пользователей!
 /packages/example-app/axle-db-data/
 
-/packages/example-app/.axle-build
-/packages/example-app/.axle-build-client
-/packages/example-app/public
+
+/packages/example-app/public/
 
 # Временные файлы тестов (если появятся)
 /tests/_temp/
 /tests/_runner.js
+
+/packages/example-app/.axle-build/
+/packages/example-app/.axle-build-client/
+
 
 # Папки для скомпилированных и упакованных приложений.
 # Мы коммитим только исходный код, а не результат сборки.

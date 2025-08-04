@@ -5,13 +5,13 @@
 let socketId = null;
 let currentActionController = null;
 let ws = null;
-// This map will store React roots for components that are targets of actions.
 const componentRoots = new Map();
 
 /**
  * Main initialization function for the client-side engine.
+ * Теперь это экспортируемая функция, а не самовызывающаяся.
  */
-function initialize() {
+export function initialize() {
   console.log('[axle-client] Initializing React-powered client...');
   hydrateRoot();
   const supportedEvents = ['click', 'submit', 'input', 'change'];
@@ -33,19 +33,15 @@ function hydrateRoot() {
   }
 
   try {
-    // React и ReactDOM теперь гарантированно в window благодаря client/index.js
+    // React и ReactDOM теперь гарантированно в window благодаря index.js
     if (typeof window.React === 'undefined' || typeof window.ReactDOM === 'undefined') {
       console.error('[axle-client] CRITICAL: React or ReactDOM not found on window object.');
       return;
     }
-
-    // ★★★ ИСПРАВЛЕНИЕ ГИДРАТАЦИИ ★★★
-    // Создаем "пустой" компонент-обертку, который ничего не рендерит.
-    // React увидит, что сервер отрендерил дочерние элементы (<div id="header-container">...), а клиент - нет.
-    // Он НЕ будет удалять серверный HTML, а просто "подхватит" его и сделает интерактивным.
-    // Это убирает предупреждение о несоответствии `dangerouslySetInnerHTML`.
+    
+    // Создаем пустой компонент-обертку, чтобы React "подхватил" серверный HTML
     const ClientAppShell = () => null;
-    window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(ClientAppShell, { initialData: window.__INITIAL_DATA__ }));
+    window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(ClientAppShell, {}));
     
     console.log('[axle-client] Hydration complete.');
 
@@ -69,7 +65,7 @@ async function handleAction(event) {
   event.stopPropagation();
   
   const action = element.getAttribute('atom-action');
-  const targetSelector = element.getAttribute('atom-target'); // e.g., "#receipt-container"
+  const targetSelector = element.getAttribute('atom-target');
   if (!action) return;
 
   if (requiredEventType === 'input' && currentActionController) {
@@ -106,8 +102,6 @@ async function handleAction(event) {
 
 /**
  * Processes the JSON payload from the server after an action.
- * @param {object} payload - The server response.
- * @param {string} targetSelector - The CSS selector for the component to update.
  */
 function processServerPayload(payload, targetSelector) {
   if (payload.redirect) {
@@ -144,8 +138,6 @@ function processServerPayload(payload, targetSelector) {
 
 /**
  * Extracts the body for a POST/PUT request from a form or payload attributes.
- * @param {HTMLElement} element - The element that triggered the action.
- * @returns {string} - A JSON string.
  */
 function getActionBody(element) {
   const form = element.closest('form');
@@ -205,9 +197,4 @@ function initializeWebSocket() {
   };
 }
 
-// --- Start the engine ---
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initialize);
-} else {
-  initialize();
-}
+// --- Блок автозапуска удален. Запуск теперь происходит из index.js ---

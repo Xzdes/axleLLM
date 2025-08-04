@@ -8,7 +8,6 @@ const builder = require('electron-builder');
 const { loadManifest } = require('./config-loader');
 const validateManifest = require('./validator');
 
-// ... (цвета и findMonorepoRoot остаются без изменений)
 const C_RESET = '\x1b[0m';
 const C_RED = '\x1b[31m';
 const C_YELLOW = '\x1b[33m';
@@ -16,85 +15,85 @@ const C_CYAN = '\x1b[36m';
 const C_GREEN = '\x1b[32m';
 
 function findMonorepoRoot(startPath) {
-    // ...
+  let currentPath = startPath;
+  while (currentPath !== path.parse(currentPath).root) {
+    const pkgPath = path.join(currentPath, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        if (pkg.workspaces) {
+          return currentPath;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    currentPath = path.dirname(currentPath);
+  }
+  return null;
 }
 
-// ★★★ Возвращаемся к простой и надежной версии runDev ★★★
 function runDev(appPath) {
-  console.log(`${C_CYAN}[axle-cli] Starting in DEV mode...${C_RESET}`);
+  console.log(`${C_CYAN}[axle-cli] Starting DEV mode orchestrator...${C_RESET}`);
   
   if (!runValidation(appPath)) {
     process.exit(1);
   }
 
-  // --- Управление процессами ---
-  let buildProcess;
-  let clientBuildProcess;
-  let electronProcess;
-
-  // --- Флаги ---
-  let isInitialBuildComplete = false;
-
-  const launchProcesses = () => {
-    // 1. Сборка компонентов (сервер + клиент)
-    const buildScriptPath = path.resolve(__dirname, 'build.js');
-    console.log(`${C_CYAN}[axle-cli] Starting component builder (server & client)...${C_RESET}`);
-    buildProcess = spawn('node', [buildScriptPath, '--watch'], { cwd: appPath });
-
-    buildProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      process.stdout.write(`${C_GREEN}[build.js]${C_RESET}: ${output}`); 
-      
-      // Ждем сигнала от первой СЕРВЕРНОЙ сборки
-      if (output.includes('// BUILD-COMPLETE //') && !isInitialBuildComplete) {
-        isInitialBuildComplete = true;
-        // Как только компоненты собраны, запускаем сборку бандла
-        launchClientBuilder();
-      }
-    });
-    buildProcess.stderr.on('data', (data) => process.stderr.write(`${C_RED}[build.js-ERROR]${C_RESET}: ${data.toString()}`));
-
-  };
+  let buildProcess, clientBuildProcess, electronProcess;
 
   const launchClientBuilder = () => {
-    // 2. Сборка клиентского бандла
     const clientBuildScriptPath = path.resolve(__dirname, 'build-client.js');
-    console.log(`${C_CYAN}[axle-cli] Starting client bundle builder...${C_RESET}`);
+    console.log(`${C_CYAN}[axle-cli] orchestrator: Components built. Starting client bundle builder...${C_RESET}`);
     clientBuildProcess = spawn('node', [clientBuildScriptPath, '--watch'], { cwd: appPath });
 
-    clientBuildProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      process.stdout.write(`${C_CYAN}[build-client.js]${C_RESET}: ${output}`);
-      
-      // Ждем сигнала от сборки бандла
-      if (output.includes('// CLIENT-BUILD-COMPLETE //') && !electronProcess) {
-        launchElectron();
-      }
+    clientBuildProcess.stdout.on('data', data => {
+        const output = data.toString();
+        process.stdout.write(output);
+        if (output.includes('// CLIENT-BUILD-COMPLETE //') && !electronProcess) {
+            launchElectron();
+        }
     });
-    clientBuildProcess.stderr.on('data', (data) => process.stderr.write(`${C_RED}[build-client.js-ERROR]${C_RESET}: ${data.toString()}`));
+    clientBuildProcess.stderr.on('data', data => process.stderr.write(data.toString()));
   };
 
   const launchElectron = () => {
-    // 3. Запуск Electron
-    console.log(`${C_GREEN}[axle-cli] All builds complete. Launching Electron...${C_RESET}`);
-    const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
-    const args = [mainProcessPath, appPath, '--dev'];
+      console.log(`${C_GREEN}--------------------------------------------------${C_RESET}`);
+      console.log(`${C_GREEN}[axle-cli] ✅ All builds complete. Launching Electron...${C_RESET}`);
+      console.log(`${C_GREEN}--------------------------------------------------${C_RESET}`);
+      const mainProcessPath = path.resolve(__dirname, '..', 'main.js');
+      const args = [mainProcessPath, appPath, '--dev'];
 
-    electronProcess = spawn(electron, args, {
-      stdio: 'inherit',
-      env: { ...process.env, ELECTRON_ENABLE_LOGGING: 'true' }
-    });
-
-    electronProcess.on('close', code => {
-      console.log(`${C_CYAN}[axle-cli] Application process exited with code ${code}.${C_RESET}`);
-      if (buildProcess) buildProcess.kill();
-      if (clientBuildProcess) clientBuildProcess.kill();
-      process.exit(code);
-    });
+      electronProcess = spawn(electron, args, { stdio: 'inherit' });
+      electronProcess.on('close', code => {
+        console.log(`${C_CYAN}[axle-cli] Application exited with code ${code}.${C_RESET}`);
+        if(buildProcess) buildProcess.kill();
+        if(clientBuildProcess) clientBuildProcess.kill();
+        process.exit(code);
+      });
   };
 
-  // --- Старт ---
-  launchProcesses();
+  const buildScriptPath = path.resolve(__dirname, 'build.js');
+  console.log(`${C_CYAN}[axle-cli] orchestrator: Starting component builder...${C_RESET}`);
+  buildProcess = spawn('node', [buildScriptPath, '--watch'], { cwd: appPath });
+
+  buildProcess.stdout.on('data', data => {
+    const output = data.toString();
+    process.stdout.write(output);
+    if (output.includes('// BUILD-COMPLETE //')) {
+        // Запускаем сборку клиента только после того, как компоненты собраны в первый раз
+        if (!clientBuildProcess) {
+            launchClientBuilder();
+        }
+    }
+  });
+
+  [buildProcess].forEach(proc => {
+      if(!proc) return;
+      proc.stderr.on('data', data => process.stderr.write(data.toString()));
+      proc.on('error', err => {
+          console.error(`${C_RED}[axle-cli] A build process failed:${C_RESET}`, err);
+          process.exit(1);
+      });
+  });
 
   process.on('SIGINT', () => {
     if (buildProcess) buildProcess.kill();
@@ -104,7 +103,9 @@ function runDev(appPath) {
   });
 }
 
-// ... остальные функции (runStart, runPackage, runValidation) остаются без изменений ...
+
+// ... (runStart, runPackage, runValidation остаются без изменений)
+
 function runStart(appPath) {
   console.log(`${C_CYAN}[axle-cli] Starting in PRODUCTION mode...${C_RESET}`);
   console.log(`${C_CYAN}[axle-cli] Running production component build...${C_RESET}`);
