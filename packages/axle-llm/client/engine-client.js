@@ -2,8 +2,9 @@
 'use strict';
 
 // Гарантируем, что глобальный объект существует до выполнения любого другого кода.
-window.axle = window.axle || {};
-window.axle.components = window.axle.components || {};
+// Эта логика теперь перенесена в index.js для более ранней инициализации.
+// window.axle = window.axle || {};
+// window.axle.components = window.axle.components || {};
 
 // --- Глобальное состояние ---
 let socketId = null;
@@ -17,7 +18,6 @@ const activeSocketSubscriptions = new Set();
  */
 export function initialize() {
   console.log('[axle-client] Initializing React-powered client...');
-  console.log('[axle-client] At initialization, window.axle is:', window.axle);
   hydrateRoot();
 
   const supportedEvents = ['click', 'submit', 'input', 'change'];
@@ -118,16 +118,6 @@ function processServerPayload(payload, targetSelector) {
     if (!props || !props.data) {
       return console.error(`[axle-client] Invalid payload for update on "${componentName}": 'props.data' is missing.`);
     }
-
-    // --- ОТЛАДОЧНЫЙ БЛОК ---
-    console.log(`[axle-client] Attempting to update component: '${componentName}'`);
-    console.log('[axle-client] Current state of window.axle:', window.axle);
-    console.log('[axle-client] Current state of window.axle.components:', window.axle.components);
-    // --- КОНЕЦ ОТЛАДОЧНОГО БЛОКА ---
-
-    if (!window.axle || !window.axle.components) {
-        return console.error('[axle-client] CRITICAL: The global component registry `window.axle.components` does not exist!');
-    }
     
     const Component = window.axle.components[componentName];
     if (!Component) {
@@ -139,23 +129,17 @@ function processServerPayload(payload, targetSelector) {
       return console.error(`[axle-client] Target element "${targetSelector}" for component "${componentName}" not found.`);
     }
 
-    // ★★★ НАЧАЛО ПРЯМОГО РЕШЕНИЯ ★★★
-    
+    // Сохраняем свежие, полные данные для следующего обновления.
+    window.__INITIAL_DATA__ = props.data;
+
     let root = componentRoots.get(targetSelector);
-
-    if (root) {
-      console.log(`[axle-client] Unmounting existing React root for '${targetSelector}'`);
-      root.unmount();
+    if (!root) {
+      root = window.ReactDOM.createRoot(targetElement);
+      componentRoots.set(targetSelector, root);
     }
-
-    console.log(`[axle-client] Creating new React root for '${targetSelector}'`);
-    root = window.ReactDOM.createRoot(targetElement);
-    componentRoots.set(targetSelector, root);
     
-    console.log(`[axle-client] Rendering component '${componentName}' from scratch.`);
+    // Рендерим компонент, передавая ему полный и правильный объект props.
     root.render(window.React.createElement(Component, props));
-
-    // ★★★ КОНЕЦ ПРЯМОГО РЕШЕНИЯ ★★★
   }
 }
 

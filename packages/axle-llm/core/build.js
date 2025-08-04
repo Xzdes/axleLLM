@@ -68,9 +68,17 @@ async function runBuild() {
 
         const serverOptions = {
             ...commonOptions,
+            // ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ ★★★
+            // Мы говорим сборщику не просто транслировать файлы, а СОБИРАТЬ ИХ В БАНДЛ.
+            // Это заставит его правильно обработать все внутренние `import`.
+            bundle: true,
+            // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
             outdir: serverOutDir,
             platform: 'node',
             format: 'cjs',
+            // Мы должны явно указать, что React - это внешняя зависимость,
+            // чтобы esbuild не пытался включить его в бандл.
+            external: ['react', 'react-dom'],
             plugins: [{
                 name: 'server-reporter',
                 setup(build) {

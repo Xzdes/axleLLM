@@ -33,21 +33,25 @@ async function runClientBuild() {
                     const componentFiles = fs.readdirSync(clientComponentsDir);
                     for (const file of componentFiles) {
                         if (file.endsWith('.js')) {
-                            // Имя файла уже в camelCase (например, "cashierPage.js")
                             const componentName = path.basename(file, '.js');
                             const componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
                             
-                            const script = `
-(function() {
-  try {
-    ${componentContent}
-    if (window.axleComponent) {
-      // Регистрируем компонент под его правильным camelCase именем
-      window.axle.components['${componentName}'] = window.axleComponent.default || window.axleComponent;
-    }
-  } catch(e) { console.error('Failed to load component ${componentName}:', e); }
-})();`;
-                            finalContent += script;
+                            // ★★★ ГЛАВНОЕ ИСПРАВЛЕНИЕ ★★★
+                            // Мы убираем лишнюю обертку (function() { ... })();
+                            // Код компонента (который уже является IIFE и создает глобальную
+                            // переменную `axleComponent`) и код регистрации вставляются напрямую.
+                            // Это гарантирует, что `axleComponent` будет в глобальной области видимости.
+                            const registrationScript = `
+try {
+  if (window.axleComponent) {
+    window.axle.components['${componentName}'] = window.axleComponent.default || window.axleComponent;
+  } else {
+    console.error("Failed to register component '${componentName}': window.axleComponent was not defined.");
+  }
+} catch(e) { console.error('Error during component registration for ${componentName}:', e); }
+`;
+                            // Сначала вставляем код компонента, потом код регистрации.
+                            finalContent += '\n' + componentContent + '\n' + registrationScript;
                         }
                     }
                 }

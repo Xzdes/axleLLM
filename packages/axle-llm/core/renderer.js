@@ -64,7 +64,7 @@ class Renderer {
         return style ? `<style data-component-name="${name}">${style}</style>` : null;
     }).filter(Boolean).join('\n');
     
-    // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ★★★
+    // ★★★ ГЛАВНОЕ ИСПРАВЛЕНИЕ ★★★
     const finalHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -76,6 +76,10 @@ class Renderer {
 <body>
     <div id="root">${appHtml}</div>
     <script>
+      // Этот скрипт выполняется ДО загрузки bundle.js.
+      // Он "напористо" создает глобальный объект, гарантируя, что
+      // скрипты регистрации компонентов в бандле найдут, куда себя добавить.
+      window.axle = { components: {} };
       window.__INITIAL_DATA__ = ${JSON.stringify(connectorData)};
     </script>
     <script src="/public/bundle.js"></script>

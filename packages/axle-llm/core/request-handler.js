@@ -132,19 +132,13 @@ class RequestHandler {
       const componentName = routeConfig.update;
       
       const parentViewRoute = this._findParentViewRouteForComponent(componentName);
-
+      
       if (!parentViewRoute) {
-        console.error(`[RequestHandler] CRITICAL: Could not find a parent view route for the updated component '${componentName}'. This may result in incomplete data on the client.`);
-        // Fallback (маловероятный, но безопасный)
-        const updatedData = {};
-        const relevantConnectors = [...(routeConfig.reads || []), ...(routeConfig.writes || [])];
-        new Set(relevantConnectors).forEach(cn => { if(finalContext.data[cn]) updatedData[cn] = finalContext.data[cn]; });
-        responsePayload = {
-            update: componentName,
-            props: { data: updatedData, user: finalContext.user, globals: this.manifest.globals, url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null) }
-        };
+          console.error(`[RequestHandler] CRITICAL: Could not find a parent view route for updated component '${componentName}'.`);
+          // В этом случае отправляем пустой ответ, чтобы избежать ошибок на клиенте
+          responsePayload = { update: componentName, props: { data: {}, user: finalContext.user, globals: this.manifest.globals } };
       } else {
-        // ★★★ ГЛАВНАЯ ЛОГИКА ★★★
+        // ОСНОВНАЯ ЛОГИКА: Собираем полный набор данных для всей страницы.
         const allRequiredConnectors = parentViewRoute.reads || [];
         const completeDataForView = {};
 
@@ -158,6 +152,10 @@ class RequestHandler {
                 }
             }
         }
+        
+        // ★★★ ГЛАВНОЕ ИСПРАВЛЕНИЕ: Мы больше НЕ создаем props.components ★★★
+        // Компоненты теперь импортируют друг друга напрямую.
+        // Мы просто отправляем полный набор данных для всей страницы.
         responsePayload = {
             update: componentName,
             props: {
