@@ -2,15 +2,14 @@
 import React from 'react';
 
 export default function AuthLayout(props) {
-  // ★★★ ИСПРАВЛЕНИЕ ★★★
-  // Этот макет должен рендерить не PageComponent, а конкретную форму,
-  // которую мы передаем через `inject` в маршруте.
-  const { formContent: FormComponent } = props.components;
+  // ★★★ ИСПРАВЛЕНИЕ: Извлекаем из props.components ★★★
+  // Этот макет должен рендерить конкретную форму (login-form или register-form)
+  const { formContent: FormComponent } = props.components || {};
 
   return (
     <div className="auth-page-wrapper">
       <div className="auth-card">
-        {/* Рендерим переданную форму (login-form или register-form) */}
+        {/* Рендерим переданную форму */}
         {FormComponent && <FormComponent {...props} />}
       </div>
     </div>

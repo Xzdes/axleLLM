@@ -32,6 +32,6 @@ __export(cashier_page_exports, {
 module.exports = __toCommonJS(cashier_page_exports);
 var import_react = __toESM(require("react"));
 function CashierPage(props) {
-  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props.components;
+  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props.components || {};
   return /* @__PURE__ */ import_react.default.createElement("div", { className: "cashier-page-wrapper" }, /* @__PURE__ */ import_react.default.createElement("div", { id: "positionsList-container" }, PositionsListComponent && /* @__PURE__ */ import_react.default.createElement(PositionsListComponent, { ...props })), /* @__PURE__ */ import_react.default.createElement("div", { id: "receipt-container" }, ReceiptComponent && /* @__PURE__ */ import_react.default.createElement(ReceiptComponent, { ...props })));
 }

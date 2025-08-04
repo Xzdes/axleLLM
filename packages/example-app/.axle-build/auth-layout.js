@@ -32,6 +32,6 @@ __export(auth_layout_exports, {
 module.exports = __toCommonJS(auth_layout_exports);
 var import_react = __toESM(require("react"));
 function AuthLayout(props) {
-  const { formContent: FormComponent } = props.components;
+  const { formContent: FormComponent } = props.components || {};
   return /* @__PURE__ */ import_react.default.createElement("div", { className: "auth-page-wrapper" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "auth-card" }, FormComponent && /* @__PURE__ */ import_react.default.createElement(FormComponent, { ...props })));
 }

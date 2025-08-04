@@ -2,9 +2,8 @@
 import React from 'react';
 
 export default function CashierPage(props) {
-  // ★★★ ИСПРАВЛЕНИЕ ★★★
-  // Извлекаем компоненты из props.components
-  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props.components;
+  // ★★★ ИСПРАВЛЕНИЕ: Извлекаем из props.components ★★★
+  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props.components || {};
 
   return (
     <div className="cashier-page-wrapper">

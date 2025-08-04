@@ -32,6 +32,6 @@ __export(main_layout_exports, {
 module.exports = __toCommonJS(main_layout_exports);
 var import_react = __toESM(require("react"));
 function MainLayout(props) {
-  const { header: HeaderComponent, pageContent: PageComponent } = props;
+  const { header: HeaderComponent, pageContent: PageComponent } = props.components || {};
   return /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { id: "header-container" }, HeaderComponent && /* @__PURE__ */ import_react.default.createElement(HeaderComponent, { ...props })), /* @__PURE__ */ import_react.default.createElement("main", { id: "pageContent-container" }, PageComponent && /* @__PURE__ */ import_react.default.createElement(PageComponent, { ...props })));
 }
