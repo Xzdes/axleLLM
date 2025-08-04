@@ -5,99 +5,117 @@ const fs = require('fs');
 
 const appPath = process.cwd();
 const outDir = path.join(appPath, 'public');
-// ★★★ Используем новую, правильную точку входа ★★★
-const entryPoint = path.resolve(__dirname, '..', 'client', 'index.js'); 
+const clientComponentsDir = path.join(appPath, '.axle-build-client');
+const entryPoint = path.resolve(__dirname, '..', 'client', 'index.js');
 
 async function runClientBuild() {
     const isWatchMode = process.argv.includes('--watch');
-    console.log(`[axle-client-build] Starting client bundle build... ${isWatchMode ? '(watch mode)' : ''}`);
+    console.log(`[axle-client-build] Starting final client bundle assembly... ${isWatchMode ? '(watch mode)' : ''}`);
 
     try {
         await fs.promises.mkdir(outDir, { recursive: true });
 
-        // Флаг, чтобы сигнал о завершении отправлялся только один раз в режиме --watch
-        let isFirstBuild = true;
-
+        // Базовая конфигурация для основного бандла движка
         const buildOptions = {
             entryPoints: [entryPoint],
-            outfile: path.join(outDir, 'bundle.js'),
             bundle: true,
             platform: 'browser',
-            format: 'iife', // Самовызывающаяся функция, чтобы не загрязнять глобальный scope
+            format: 'iife',
             sourcemap: true,
             define: { 'process.env.NODE_ENV': `"${isWatchMode ? 'development' : 'production'}"` },
-            // Убираем все старые "хаки": inject, banner, footer.
-            // Вся логика теперь находится в точке входа (entryPoint).
+            write: false, // Мы не пишем файл сразу, а обрабатываем его в памяти
         };
 
-        const onBuildEnd = (result) => {
+        // Функция, которая собирает и склеивает все вместе
+        const assembleBundle = async () => {
+            console.log('[axle-client-build] Assembling final bundle...');
+            const result = await esbuild.build(buildOptions);
+            
             if (result.errors.length > 0) {
-                console.error('[axle-client-build] 🚨 Client bundle build failed. See errors above.');
-                // esbuild сам выведет детальные ошибки в stderr
+                console.error('[axle-client-build] 🚨 Core engine build failed.');
                 return;
             }
+
+            let finalContent = result.outputFiles[0].text;
             
-            if (isFirstBuild) {
-                console.log('[axle-client-build] ✅ Initial client bundle complete.');
-                // Отправляем сигнал оркестратору commands.js
-                console.log('// CLIENT-BUILD-COMPLETE //');
-                isFirstBuild = false;
-            } else {
-                console.log(`[axle-client-build] ✨ Client bundle rebuild complete.`);
+            // Добавляем неймспейс
+            finalContent += '\nwindow.axle = window.axle || { components: {} };\n';
+
+            // Добавляем скомпилированные компоненты
+            if (fs.existsSync(clientComponentsDir)) {
+                const componentFiles = fs.readdirSync(clientComponentsDir).filter(f => f.endsWith('.js'));
+                for (const file of componentFiles) {
+                    const componentName = path.basename(file, '.js');
+                    const componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
+                    const script = `
+// --- Component: ${componentName} ---
+(function() {
+  const exports = {};
+  const module = { exports };
+  ${componentContent.replace('var axleComponent =', 'module.exports =')}
+  if (module.exports) {
+    window.axle.components['${componentName}'] = module.exports.default || module.exports;
+  }
+})();
+`;
+                    finalContent += script;
+                }
+                console.log(`[axle-client-build] Injected ${componentFiles.length} component definitions.`);
             }
+
+            // Записываем итоговый файл
+            fs.writeFileSync(path.join(outDir, 'bundle.js'), finalContent);
+            console.log('[axle-client-build] ✅ Final bundle written to disk.');
         };
 
+        // Первичная сборка
+        await assembleBundle();
+        console.log('// CLIENT-BUILD-COMPLETE //'); // Отправляем сигнал оркестратору
+
         if (isWatchMode) {
-            const ctx = await esbuild.context({
-                ...buildOptions,
-                // Добавляем плагин для вывода логов ПОСЛЕ каждой пересборки
-                plugins: [{
-                    name: 'watch-reporter',
-                    setup(build) {
-                        build.onEnd(onBuildEnd);
-                    },
-                }],
+            // В режиме watch, нам нужно следить и за файлами движка, и за скомпилированными компонентами
+            const engineFilesWatcher = esbuild.context({ ...buildOptions, write: true, outfile: path.join(outDir, 'bundle.js') });
+            await engineFilesWatcher.watch();
+            console.log('[axle-client-build] Watching for engine file changes...');
+            
+            // Просто пересобираем бандл, когда меняются компоненты
+            fs.watch(clientComponentsDir, async (eventType, filename) => {
+                if (filename && filename.endsWith('.js')) {
+                    console.log(`[axle-client-build] Detected change in components: ${filename}. Re-assembling bundle...`);
+                    await assembleBundle();
+                    console.log(`[axle-client-build] ✨ Bundle re-assembled.`);
+                }
             });
-            await ctx.watch();
-            console.log('[axle-client-build] Watching for client file changes...');
-        } else {
-            const result = await esbuild.build(buildOptions);
-            onBuildEnd(result);
         }
 
     } catch (error) {
-        console.error('[axle-client-build] 🚨 Client bundle build process failed to start:', error);
+        console.error('[axle-client-build] 🚨 Client build process failed to start:', error);
         process.exit(1);
     }
 }
 
-// Убедимся, что новая точка входа существует. Если нет - создадим ее.
+// Убедимся, что точка входа существует
 async function createClientEntryPoint() {
     const entryPointPath = entryPoint;
-    const engineClientPath = './engine-client.js'; // Относительный путь для import
+    const engineClientPath = './engine-client.js';
     const content = `
-// This is the new main entry point for the client bundle.
-// It ensures React is bundled and exposed globally before the engine runs.
+// Главная точка входа. Здесь мы импортируем React, чтобы esbuild его сбандлил.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-// Make React and ReactDOM globally available for the engine and components.
 window.React = React;
 window.ReactDOM = ReactDOM;
-window.axle = { components: {} }; // Initialize the component namespace.
 
-// Now that globals are set, run the actual engine logic.
+// Запускаем сам движок
 import '${engineClientPath}';
 `;
     const clientDir = path.dirname(entryPointPath);
-    if (!fs.existsSync(clientDir)) {
-        fs.mkdirSync(clientDir, { recursive: true });
-    }
+    if (!fs.existsSync(clientDir)) { fs.mkdirSync(clientDir, { recursive: true }); }
     if (!fs.existsSync(entryPointPath)) {
         fs.writeFileSync(entryPointPath, content.trim(), 'utf-8');
-        console.log(`[axle-client-build] Created client entry point at ${entryPointPath}`);
     }
 }
+
 
 async function main() {
     await createClientEntryPoint();
