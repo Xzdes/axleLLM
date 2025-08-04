@@ -24,6 +24,20 @@ class Renderer {
     }
   }
 
+  _getAllStyles() {
+    // ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: ЗАГРУЖАЕМ ВСЕ СТИЛИ ★★★
+    // Мы просто берем все стили всех компонентов, которые есть в AssetLoader.
+    let allStyles = '';
+    const allComponentNames = Object.keys(this.manifest.components || {});
+    for (const name of allComponentNames) {
+      const style = this.assetLoader.getStyleForComponent(name);
+      if (style) {
+        allStyles += `<style data-component-name="${name}">${style}</style>\n`;
+      }
+    }
+    return allStyles;
+  }
+
   async renderView(routeConfig, dataContext, reqUrl) {
     const layoutName = routeConfig.layout;
     if (!layoutName) throw new Error(`[Renderer] Route config is missing 'layout' property.`);
@@ -41,8 +55,6 @@ class Renderer {
     };
 
     const injectedComponentTypes = {};
-    const allComponentNames = new Set([layoutName]);
-
     if (routeConfig.inject) {
       for (const placeholder in routeConfig.inject) {
         const componentName = routeConfig.inject[placeholder];
@@ -50,7 +62,6 @@ class Renderer {
           const InjectedComponent = this._loadCompiledComponent(componentName);
           if (InjectedComponent) {
             injectedComponentTypes[placeholder] = InjectedComponent;
-            allComponentNames.add(componentName);
           }
         }
       }
@@ -59,12 +70,9 @@ class Renderer {
     const finalProps = { ...props, components: injectedComponentTypes };
     const appHtml = ReactDOMServer.renderToString(React.createElement(LayoutComponent, finalProps));
     
-    const renderedStyles = Array.from(allComponentNames).map(name => {
-        const style = this.assetLoader.getStyleForComponent(name);
-        return style ? `<style data-component-name="${name}">${style}</style>` : null;
-    }).filter(Boolean).join('\n');
-    
-    // ★★★ ГЛАВНОЕ ИСПРАВЛЕНИЕ ★★★
+    // ★★★ ИСПОЛЬЗУЕМ НОВУЮ ФУНКЦИЮ ★★★
+    const renderedStyles = this._getAllStyles();
+
     const finalHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -76,9 +84,6 @@ class Renderer {
 <body>
     <div id="root">${appHtml}</div>
     <script>
-      // Этот скрипт выполняется ДО загрузки bundle.js.
-      // Он "напористо" создает глобальный объект, гарантируя, что
-      // скрипты регистрации компонентов в бандле найдут, куда себя добавить.
       window.axle = { components: {} };
       window.__INITIAL_DATA__ = ${JSON.stringify(connectorData)};
     </script>

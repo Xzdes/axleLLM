@@ -3,8 +3,20 @@
 const path = require('path');
 const { z, ZodError } = require('zod');
 
+// ★★★ НАЧАЛО ГЛАВНОГО ИСПРАВЛЕНИЯ ★★★
+/**
+ * Умная функция вычисления выражений.
+ * Она не только выполняет JS-код, но и пытается преобразовать
+ * результат в JSON, если он похож на JSON-строку.
+ * @param {*} expression - Выражение для вычисления.
+ * @param {object} context - Контекст данных.
+ * @param {string} appPath - Путь к приложению.
+ * @returns {*} - Результат вычисления.
+ */
 function evaluate(expression, context, appPath) {
-  if (typeof expression !== 'string') return expression;
+  if (typeof expression !== 'string') {
+    return expression;
+  }
 
   const func = new Function('ctx', 'require', `
     with (ctx) {
@@ -16,8 +28,27 @@ function evaluate(expression, context, appPath) {
   
   context.zod = z;
 
-  return func(context, smartRequire);
+  const result = func(context, smartRequire);
+  
+  // ЭТО И ЕСТЬ ИСПРАВЛЕНИЕ:
+  // Если результатом вычисления стала строка, которая выглядит как JSON,
+  // мы преобразуем ее в настоящий объект/массив.
+  // Это исправляет передачу аргументов в мост.
+  if (typeof result === 'string') {
+    const trimmedResult = result.trim();
+    if ((trimmedResult.startsWith('{') && trimmedResult.endsWith('}')) || (trimmedResult.startsWith('[') && trimmedResult.endsWith(']'))) {
+      try {
+        return JSON.parse(trimmedResult);
+      } catch (e) {
+        // Ошибка парсинга, значит, это была просто строка. Возвращаем как есть.
+      }
+    }
+  }
+
+  return result;
 }
+// ★★★ КОНЕЦ ГЛАВНОГО ИСПРАВЛЕНИЯ ★★★
+
 
 class ActionEngine {
   constructor(context, appPath, assetLoader, requestHandler) {

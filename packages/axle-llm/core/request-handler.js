@@ -130,44 +130,38 @@ class RequestHandler {
       responsePayload.redirect = internalActions.redirect;
     } else if (routeConfig.update) {
       const componentName = routeConfig.update;
-      
       const parentViewRoute = this._findParentViewRouteForComponent(componentName);
       
-      if (!parentViewRoute) {
-          console.error(`[RequestHandler] CRITICAL: Could not find a parent view route for updated component '${componentName}'.`);
-          // В этом случае отправляем пустой ответ, чтобы избежать ошибок на клиенте
-          responsePayload = { update: componentName, props: { data: {}, user: finalContext.user, globals: this.manifest.globals } };
-      } else {
-        // ОСНОВНАЯ ЛОГИКА: Собираем полный набор данных для всей страницы.
+      if (parentViewRoute) {
         const allRequiredConnectors = parentViewRoute.reads || [];
         const completeDataForView = {};
-
         for (const connectorName of allRequiredConnectors) {
-            if (finalContext.data[connectorName]) {
-                completeDataForView[connectorName] = finalContext.data[connectorName];
-            } else {
-                const connector = this.connectorManager.getConnector(connectorName);
-                if (connector) {
-                    completeDataForView[connectorName] = await connector.read();
-                }
+          if (finalContext.data[connectorName]) {
+            completeDataForView[connectorName] = finalContext.data[connectorName];
+          } else {
+            const connector = this.connectorManager.getConnector(connectorName);
+            if (connector) {
+              completeDataForView[connectorName] = await connector.read();
             }
+          }
         }
-        
-        // ★★★ ГЛАВНОЕ ИСПРАВЛЕНИЕ: Мы больше НЕ создаем props.components ★★★
-        // Компоненты теперь импортируют друг друга напрямую.
-        // Мы просто отправляем полный набор данных для всей страницы.
-        responsePayload = {
-            update: componentName,
-            props: {
-                data: completeDataForView,
-                user: finalContext.user,
-                globals: this.manifest.globals || {},
-                url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
-            },
+        responsePayload.update = componentName;
+        responsePayload.props = {
+          data: completeDataForView,
+          user: finalContext.user,
+          globals: this.manifest.globals || {},
+          url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
         };
       }
     }
     
+    // ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: ДОБАВЛЯЕМ ПЕРЕДАЧУ КОМАНД МОСТА ★★★
+    // После всех остальных операций, мы проверяем, не оставил ли ActionEngine
+    // команду на вызов функции моста.
+    if (internalActions.bridgeCalls && internalActions.bridgeCalls.length > 0) {
+        responsePayload.bridgeCalls = internalActions.bridgeCalls;
+    }
+
     if (res && !res.headersSent) {
       if (sessionCookie) res.setHeader('Set-Cookie', sessionCookie);
       this._sendResponse(res, 200, responsePayload, 'application/json');

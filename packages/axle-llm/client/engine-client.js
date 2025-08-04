@@ -2,9 +2,8 @@
 'use strict';
 
 // Гарантируем, что глобальный объект существует до выполнения любого другого кода.
-// Эта логика теперь перенесена в index.js для более ранней инициализации.
-// window.axle = window.axle || {};
-// window.axle.components = window.axle.components || {};
+window.axle = window.axle || {};
+window.axle.components = window.axle.components || {};
 
 // --- Глобальное состояние ---
 let socketId = null;
@@ -107,6 +106,20 @@ async function executeAction(element, triggerType) {
  * Обрабатывает ответ от сервера для обновления UI.
  */
 function processServerPayload(payload, targetSelector) {
+  // ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: ОБРАБАТЫВАЕМ КОМАНДЫ МОСТА ★★★
+  // Первым делом проверяем, не прислал ли сервер команду на вызов функции моста.
+  if (payload.bridgeCalls) {
+    // Проверяем, что мост вообще доступен
+    if (window.axleBridge && typeof window.axleBridge.call === 'function') {
+      payload.bridgeCalls.forEach(call => {
+        console.log(`[axle-client] Executing bridge call: ${call.api}`, call.args);
+        window.axleBridge.call(call.api, call.args);
+      });
+    } else {
+      console.error('[axle-client] Received bridge call command, but `window.axleBridge` is not available.');
+    }
+  }
+
   if (payload.redirect) {
     window.location.href = payload.redirect;
     return;
@@ -129,7 +142,6 @@ function processServerPayload(payload, targetSelector) {
       return console.error(`[axle-client] Target element "${targetSelector}" for component "${componentName}" not found.`);
     }
 
-    // Сохраняем свежие, полные данные для следующего обновления.
     window.__INITIAL_DATA__ = props.data;
 
     let root = componentRoots.get(targetSelector);
@@ -138,7 +150,6 @@ function processServerPayload(payload, targetSelector) {
       componentRoots.set(targetSelector, root);
     }
     
-    // Рендерим компонент, передавая ему полный и правильный объект props.
     root.render(window.React.createElement(Component, props));
   }
 }
