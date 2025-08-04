@@ -19,6 +19,6 @@
   "author": "Xzdes",
   "license": "MIT",
   "devDependencies": {
-    "react": "^18.2.0"
+    "react": "^19.1.1"
   }
 }
