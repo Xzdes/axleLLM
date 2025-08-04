@@ -6,24 +6,29 @@ let socketId = null;
 let currentActionController = null;
 let ws = null;
 const componentRoots = new Map();
+// ★ НОВОЕ: Отслеживаем активные подписки, чтобы не дублировать их.
+const activeSocketSubscriptions = new Set();
 
 /**
  * Main initialization function for the client-side engine.
- * Теперь это экспортируемая функция, а не самовызывающаяся.
  */
 export function initialize() {
   console.log('[axle-client] Initializing React-powered client...');
   hydrateRoot();
+
+  // ★ ИЗМЕНЕНИЕ: Функция для обработки событий переименована для ясности.
   const supportedEvents = ['click', 'submit', 'input', 'change'];
   supportedEvents.forEach(eventType => {
-    document.body.addEventListener(eventType, handleAction, true);
+    document.body.addEventListener(eventType, handleDOMEvent, true);
   });
+
   initializeWebSocket();
+  initializeMutationObserver(); // ★ НОВОЕ: Запускаем наблюдатель за DOM.
   console.log('[axle-client] Initialized successfully.');
 }
 
 /**
- * Hydrates the initial server-rendered HTML into an interactive React application.
+ * Hydrates the initial server-rendered HTML.
  */
 function hydrateRoot() {
   const rootElement = document.getElementById('root');
@@ -31,44 +36,50 @@ function hydrateRoot() {
     console.error('[axle-client] CRITICAL: Root element with id="root" not found. Hydration failed.');
     return;
   }
-
   try {
-    // React и ReactDOM теперь гарантированно в window благодаря index.js
     if (typeof window.React === 'undefined' || typeof window.ReactDOM === 'undefined') {
       console.error('[axle-client] CRITICAL: React or ReactDOM not found on window object.');
       return;
     }
-    
-    // Создаем пустой компонент-обертку, чтобы React "подхватил" серверный HTML
     const ClientAppShell = () => null;
     window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(ClientAppShell, {}));
-    
     console.log('[axle-client] Hydration complete.');
-
   } catch (e) {
     console.error('[axle-client] CRITICAL: Hydration failed.', e);
   }
 }
 
 /**
- * Handles user interactions that trigger an `atom-action`.
+ * ★ РЕФАКТОРИНГ: Эта функция теперь только обрабатывает DOM-событие и вызывает executeAction.
  * @param {Event} event - The DOM event.
  */
-async function handleAction(event) {
+async function handleDOMEvent(event) {
   const element = event.target.closest('[atom-action]');
   if (!element) return;
 
   const requiredEventType = element.getAttribute('atom-event') || (element.tagName === 'FORM' ? 'submit' : 'click');
   if (event.type !== requiredEventType) return;
-  
+
   event.preventDefault();
   event.stopPropagation();
-  
+
+  // Вызываем основную логику выполнения действия.
+  executeAction(element, requiredEventType);
+}
+
+/**
+ * ★ РЕФАКТОРИНГ: Основная логика выполнения действия, вынесенная из обработчика.
+ * Может быть вызвана как из DOM-события, так и программно (например, от WebSocket).
+ * @param {HTMLElement} element - The element with atom-action attributes.
+ * @param {string} triggerType - The type of event that triggered the action ('click', 'input', etc.).
+ */
+async function executeAction(element, triggerType = 'programmatic') {
   const action = element.getAttribute('atom-action');
   const targetSelector = element.getAttribute('atom-target');
   if (!action) return;
 
-  if (requiredEventType === 'input' && currentActionController) {
+  // Логика прерывания для событий ввода (дебаунсинг)
+  if (triggerType === 'input' && currentActionController) {
     currentActionController.abort();
   }
   currentActionController = new AbortController();
@@ -88,7 +99,6 @@ async function handleAction(event) {
     }
 
     const payload = await response.json();
-    
     processServerPayload(payload, targetSelector);
 
   } catch (error) {
@@ -100,8 +110,9 @@ async function handleAction(event) {
   }
 }
 
+
 /**
- * Processes the JSON payload from the server after an action.
+ * Processes the JSON payload from the server.
  */
 function processServerPayload(payload, targetSelector) {
   if (payload.redirect) {
@@ -120,10 +131,9 @@ function processServerPayload(payload, targetSelector) {
     }
     
     const Component = window.axle.components[componentToUpdate];
-    
     if (!Component) {
-        console.error(`[axle-client] Component definition for '${componentToUpdate}' not found.`);
-        return;
+      console.error(`[axle-client] Component definition for '${componentToUpdate}' not found.`);
+      return;
     }
 
     let root = componentRoots.get(targetSelector);
@@ -137,7 +147,7 @@ function processServerPayload(payload, targetSelector) {
 }
 
 /**
- * Extracts the body for a POST/PUT request from a form or payload attributes.
+ * Extracts the body for a POST/PUT request from form data.
  */
 function getActionBody(element) {
   const form = element.closest('form');
@@ -163,22 +173,44 @@ function getActionBody(element) {
 }
 
 /**
- * Initializes the WebSocket connection for real-time updates.
+ * Initializes the WebSocket connection.
  */
 function initializeWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}`;
   ws = new WebSocket(wsUrl);
 
-  ws.onopen = () => console.log('[axle-client] WebSocket connection established.');
+  ws.onopen = () => {
+    console.log('[axle-client] WebSocket connection established.');
+    // ★ ИЗМЕНЕНИЕ: При подключении сканируем DOM на наличие уже существующих элементов для подписки.
+    scanAndSubscribeToSockets();
+  };
   
   ws.onmessage = (message) => {
     try {
       const data = JSON.parse(message.data);
+
       if (data.type === 'socket_id_assigned') {
         socketId = data.id;
         console.log(`[axle-client] WebSocket ID assigned: ${socketId}`);
+        return;
       }
+      
+      // ★★★ НАЧАЛО НОВОЙ ЛОГИКИ: ОБРАБОТКА PUSH-СОБЫТИЙ ОТ СЕРВЕРА ★★★
+      if (data.type === 'event' && data.event) {
+        console.log(`[axle-client] Received WebSocket event: '${data.event}'`);
+        const subscribedElements = document.querySelectorAll(`[atom-on-event="${data.event}"]`);
+        
+        if (subscribedElements.length > 0) {
+          subscribedElements.forEach(element => {
+            console.log(`[axle-client] Triggering action on element for event '${data.event}'`, element);
+            // Программно вызываем выполнение действия, связанного с этим элементом.
+            executeAction(element);
+          });
+        }
+      }
+      // ★★★ КОНЕЦ НОВОЙ ЛОГИКИ ★★★
+
     } catch (e) {
       console.error('[axle-client] Failed to handle WebSocket message:', e);
     }
@@ -188,6 +220,7 @@ function initializeWebSocket() {
     console.log('[axle-client] WebSocket connection closed. Reconnecting in 3 seconds...');
     socketId = null;
     ws = null;
+    activeSocketSubscriptions.clear(); // Сбрасываем подписки при разрыве.
     setTimeout(initializeWebSocket, 3000);
   };
 
@@ -197,4 +230,36 @@ function initializeWebSocket() {
   };
 }
 
-// --- Блок автозапуска удален. Запуск теперь происходит из index.js ---
+/**
+ * ★ НОВОЕ: Сканирует DOM в поисках элементов с атрибутом `atom-socket` и подписывается на каналы.
+ */
+function scanAndSubscribeToSockets() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+  document.querySelectorAll('[atom-socket]').forEach(el => {
+    const channel = el.getAttribute('atom-socket');
+    // Подписываемся только если еще не подписаны на этот канал.
+    if (channel && !activeSocketSubscriptions.has(channel)) {
+      console.log(`[axle-client] Subscribing to WebSocket channel: '${channel}'`);
+      ws.send(JSON.stringify({ type: 'subscribe', channel: channel }));
+      activeSocketSubscriptions.add(channel);
+    }
+  });
+}
+
+/**
+ * ★ НОВОЕ: Инициализирует MutationObserver для отслеживания появления новых
+ * компонентов, которым нужна WebSocket-подписка (например, после AJAX-обновления).
+ */
+function initializeMutationObserver() {
+    const observer = new MutationObserver((mutationsList) => {
+        for(const mutation of mutationsList) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                // Проверяем, не появился ли элемент, которому нужна подписка.
+                scanAndSubscribeToSockets();
+            }
+        }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+}

@@ -17,7 +17,7 @@ class Renderer {
     try {
       delete require.cache[require.resolve(componentPath)];
       const componentModule = require(componentPath);
-      console.log(`[Renderer-LOG] Successfully loaded component '${componentName}'`);
+      // console.log(`[Renderer-LOG] Successfully loaded component '${componentName}'`);
       return componentModule.default || componentModule;
     } catch (error) {
       console.error(`[Renderer-LOG] CRITICAL: Failed to load compiled component '${componentName}' from ${componentPath}.`);
@@ -26,25 +26,30 @@ class Renderer {
   }
 
   async renderView(routeConfig, dataContext, reqUrl) {
-    console.log(`\n[Renderer-LOG] --- Starting renderView for layout: ${routeConfig.layout} ---`);
+    // console.log(`\n[Renderer-LOG] --- Starting renderView for layout: ${routeConfig.layout} ---`);
     const layoutName = routeConfig.layout;
     if (!layoutName) throw new Error(`[Renderer] Route config is missing 'layout' property.`);
     
     const LayoutComponent = this._loadCompiledComponent(layoutName);
     if (!LayoutComponent) return `<html><body>Error: Layout component could not be loaded.</body></html>`;
+
+    // ★ ИЗМЕНЕНИЕ: dataContext теперь содержит и данные из коннекторов, и объект user.
+    // Мы извлекаем пользователя и передаем его в props отдельно от `data`.
+    const { user, ...connectorData } = dataContext;
     
     const props = {
-      data: dataContext,
+      data: connectorData, // Только данные из коннекторов
+      user: user,          // Пользователь как отдельный prop
       globals: this.manifest.globals || {},
       url: this._getUrlContext(reqUrl),
     };
-    console.log('[Renderer-LOG] Initial props object created:', util.inspect(props, { depth: 3, colors: true }));
+    // console.log('[Renderer-LOG] Initial props object created:', util.inspect(props, { depth: 3, colors: true }));
 
     const injectedComponentTypes = {};
     const allComponentNames = new Set([layoutName]);
 
     if (routeConfig.inject) {
-      console.log('[Renderer-LOG] Injecting component types:', routeConfig.inject);
+      // console.log('[Renderer-LOG] Injecting component types:', routeConfig.inject);
       for (const placeholder in routeConfig.inject) {
         const componentName = routeConfig.inject[placeholder];
         if (componentName) {
@@ -57,19 +62,12 @@ class Renderer {
       }
     }
     
-    // Create the final props object, separating data props from component types
     const finalProps = { ...props, components: injectedComponentTypes };
-    console.log('[Renderer-LOG] Final props for LayoutComponent:', util.inspect({
-      data: finalProps.data,
-      globals: finalProps.globals,
-      url: finalProps.url,
-      components: Object.keys(finalProps.components)
-    }, { colors: true }));
     
     const appElement = React.createElement(LayoutComponent, finalProps);
-    console.log('[Renderer-LOG] App element created. Starting ReactDOMServer.renderToString...');
+    // console.log('[Renderer-LOG] App element created. Starting ReactDOMServer.renderToString...');
     const appHtml = ReactDOMServer.renderToString(appElement);
-    console.log('[Renderer-LOG] renderToString complete.');
+    // console.log('[Renderer-LOG] renderToString complete.');
     
     const renderedStyles = Array.from(allComponentNames).map(name => {
         const style = this.assetLoader.getStyleForComponent(name);
@@ -105,7 +103,8 @@ class Renderer {
 
   _getUrlContext(reqUrl) {
     if (!reqUrl) return { pathname: '/', query: {} };
-    return { pathname: reqUrl.pathname, query: Object.fromEntries(reqUrl.searchParams) };
+    const url = new URL(reqUrl.toString(), 'http://localhost');
+    return { pathname: url.pathname, query: Object.fromEntries(url.searchParams) };
   }
 }
 

@@ -33,7 +33,15 @@ async function runClientBuild() {
                     const componentFiles = fs.readdirSync(clientComponentsDir).filter(f => f.endsWith('.js'));
                     for (const file of componentFiles) {
                         const componentName = path.basename(file, '.js');
-                        const componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
+                        let componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
+
+                        // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+                        // Удаляем сгенерированные esbuild'ом require, которые не работают в браузере.
+                        // React и так будет доступен глобально через window.React.
+                        componentContent = componentContent.replace(/var React = require\("react"\);/g, '');
+                        componentContent = componentContent.replace(/var import_react = require\("react"\);/g, '');
+                        // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+
                         const script = `
 (function() {
   try {
@@ -73,7 +81,9 @@ async function runClientBuild() {
                 console.log(`[axle-client-build] ✨ Bundle re-assembled.`);
             };
             fs.watch(path.resolve(__dirname, '..', 'client'), { recursive: true }, watcherCallback);
-            fs.watch(clientComponentsDir, watcherCallback);
+            if (fs.existsSync(clientComponentsDir)) {
+                fs.watch(clientComponentsDir, watcherCallback);
+            }
             console.log('[axle-client-build] Watching for engine and component changes...');
         }
 
@@ -83,7 +93,6 @@ async function runClientBuild() {
     }
 }
 
-// Удаляем функцию createClientEntryPoint, так как файл теперь статичен.
 async function main() {
     await runClientBuild();
 }

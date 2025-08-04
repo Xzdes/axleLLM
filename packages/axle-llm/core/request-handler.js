@@ -35,7 +35,6 @@ class RequestHandler {
       const url = new URL(req.url, `http://${req.headers.host}`);
       console.log(`\n[RequestHandler] --> Handling request: ${req.method} ${url.pathname}`);
       
-      // Обработка статического файла клиентского бандла
       if (url.pathname === '/public/bundle.js') {
         const bundlePath = path.join(this.appPath, 'public', 'bundle.js');
         try {
@@ -57,14 +56,13 @@ class RequestHandler {
       console.log(`[RequestHandler] Route found: '${routeConfig.key}', type: '${routeConfig.type}'`);
       
       const user = this.authEngine ? await this.authEngine.getUserFromRequest(req) : null;
-      console.log(`[RequestHandler] User status: ${user ? `Logged in as ${user.login}` : 'Not authenticated'}`);
+      console.log(`[RequestHandler] User status: ${user ? `Logged in as ${user.login || user.name}` : 'Not authenticated'}`);
       
-      // ★★★ НАЧАЛО: ИСПРАВЛЕННАЯ ЛОГИКА АВТОРИЗАЦИИ ★★★
+      // ★★★ НАЧАЛО ИСПРАВЛЕННОЙ ЛОГИКИ АВТОРИЗАЦИИ ★★★
       if (routeConfig.auth?.required && !user) {
         const redirectUrl = routeConfig.auth.failureRedirect || '/login';
 
         // Если это запрос СТРАНИЦЫ (view), делаем настоящий HTTP-редирект (код 302).
-        // Это исправляет проблему с отображением JSON.
         if (routeConfig.type === 'view') {
           console.log(`[RequestHandler] Unauthenticated access to protected view route. Performing HTTP 302 redirect to ${redirectUrl}`);
           this.authEngine.redirect(res, redirectUrl);
@@ -83,7 +81,9 @@ class RequestHandler {
       if (routeConfig.type === 'view') {
         console.log(`[RequestHandler] Preparing to render view for route '${routeConfig.key}'...`);
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
-        const html = await this.renderer.renderView(routeConfig, dataContext, url);
+        // ★ НОВОЕ: Передаем пользователя в контекст данных для рендеринга.
+        const finalDataContext = { ...dataContext, user };
+        const html = await this.renderer.renderView(routeConfig, finalDataContext, url);
         this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
       } else if (routeConfig.type === 'action') {
         console.log(`[RequestHandler] Preparing to run action for route '${routeConfig.key}'...`);
@@ -167,7 +167,9 @@ class RequestHandler {
       const props = {
         data: {},
         globals: this.manifest.globals || {},
-        url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
+        url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null),
+        // ★ НОВОЕ: Передаем пользователя в props для обновляемого компонента.
+        user: finalContext.user 
       };
 
       for (const connectorName of requiredConnectors) {
@@ -196,6 +198,7 @@ class RequestHandler {
 
   _findRoute(method, pathname) {
     const routes = this.manifest.routes || {};
+    // Ищем точное совпадение
     const key = `${method} ${pathname}`;
     if (routes[key]) {
       routes[key].key = key;
@@ -212,6 +215,10 @@ class RequestHandler {
         try {
           if (!body) return resolve({});
           if (req.headers['content-type']?.includes('application/json')) return resolve(JSON.parse(body));
+          // ★ ИЗМЕНЕНИЕ: Добавлена поддержка стандартного form-urlencoded, который часто используется формами.
+          if (req.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
+            return resolve(Object.fromEntries(new URLSearchParams(body)));
+          }
           resolve({});
         } catch (e) { reject(e); }
       });
