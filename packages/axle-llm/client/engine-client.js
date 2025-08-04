@@ -2,7 +2,6 @@
 'use strict';
 
 // Гарантируем, что глобальный объект существует до выполнения любого другого кода.
-// Это решает все проблемы с "гонкой состояний" при загрузке.
 window.axle = window.axle || {};
 window.axle.components = window.axle.components || {};
 
@@ -42,7 +41,6 @@ function hydrateRoot() {
     if (!window.React || !window.ReactDOM) {
       return console.error('[axle-client] CRITICAL: React or ReactDOM not found on window object.');
     }
-    // Создаем пустую обертку, чтобы React "подхватил" существующий DOM.
     const ClientAppShell = () => null;
     window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(ClientAppShell, {}));
     console.log('[axle-client] Hydration complete.');

@@ -25,15 +25,11 @@ function validateComponents(manifest, appPath) {
     const config = components[name];
     const category = `Component '${name}'`;
 
-    // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
     // 1. Преобразуем camelCase имя компонента из манифеста в kebab-case для поиска файла.
-    //    'mainLayout' => 'main-layout'
     const kebabCaseName = camelToKebab(name);
     
     // 2. Формируем имя файла с расширением.
-    //    'main-layout' => 'main-layout.jsx'
     const templateFilename = `${kebabCaseName}.jsx`;
-    // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
     
     const templatePath = path.join(componentsDir, templateFilename);
 

@@ -21,31 +21,28 @@ async function runClientBuild() {
             platform: 'browser',
             format: 'iife',
             sourcemap: true,
-            write: false, // Мы пишем в память, чтобы потом добавить компоненты
+            write: false,
         };
         
         const assembleAndWriteBundle = async () => {
             try {
-                // 1. Собираем ядро движка
                 const result = await esbuild.build(buildOptions);
                 let finalContent = result.outputFiles[0].text;
                 
-                // 2. Просто и надежно добавляем скомпилированные компоненты в конец
                 if (fs.existsSync(clientComponentsDir)) {
                     const componentFiles = fs.readdirSync(clientComponentsDir);
                     for (const file of componentFiles) {
                         if (file.endsWith('.js')) {
+                            // Имя файла уже в camelCase (например, "cashierPage.js")
                             const componentName = path.basename(file, '.js');
                             const componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
                             
-                            // ★★★ ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ★★★
-                            // Создаем простой и надежный блок для каждого компонента.
-                            // `axleComponent` - это глобальное имя, которое мы задали в `build.js`.
                             const script = `
 (function() {
   try {
     ${componentContent}
     if (window.axleComponent) {
+      // Регистрируем компонент под его правильным camelCase именем
       window.axle.components['${componentName}'] = window.axleComponent.default || window.axleComponent;
     }
   } catch(e) { console.error('Failed to load component ${componentName}:', e); }

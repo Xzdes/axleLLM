@@ -5,24 +5,24 @@ module.exports = {
   // Роут для страницы входа
   "GET /login": {
     "type": "view",
-    "layout": "mainLayout", // ★★★ ИЗМЕНЕНО ★★★
+    "layout": "mainLayout",
     "reads": ["user"],
     "inject": {
       "header": "header",
-      "pageContent": "authLayout", // ★★★ ИЗМЕНЕНО ★★★
-      "formContent": "loginForm"   // ★★★ ИЗМЕНЕНО ★★★
+      "pageContent": "authLayout",
+      "formContent": "loginForm"
     }
   },
 
   // Роут для страницы регистрации
   "GET /register": {
     "type": "view",
-    "layout": "mainLayout", // ★★★ ИЗМЕНЕНО ★★★
+    "layout": "mainLayout",
     "reads": ["user"],
     "inject": {
       "header": "header",
-      "pageContent": "authLayout", // ★★★ ИЗМЕНЕНО ★★★
-      "formContent": "registerForm" // ★★★ ИЗМЕНЕНО ★★★
+      "pageContent": "authLayout",
+      "formContent": "registerForm"
     }
   },
 

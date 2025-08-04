@@ -59,14 +59,18 @@ async function runBuild() {
             }
         };
 
-        const serverOptions = {
+        const commonOptions = {
             entryPoints: entryPointsObject,
-            outdir: serverOutDir,
-            platform: 'node',
-            format: 'cjs',
             jsx: 'transform',
             jsxFactory: 'React.createElement',
             jsxFragment: 'React.Fragment',
+        };
+
+        const serverOptions = {
+            ...commonOptions,
+            outdir: serverOutDir,
+            platform: 'node',
+            format: 'cjs',
             plugins: [{
                 name: 'server-reporter',
                 setup(build) {
@@ -80,20 +84,13 @@ async function runBuild() {
             }],
         };
 
-        // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
         const clientOptions = {
-            entryPoints: entryPointsObject,
+            ...commonOptions,
             outdir: clientOutDir,
             bundle: true,
             platform: 'browser',
             format: 'iife',
-            globalName: 'axleComponent', // Каждый компонент будет обернут в (function(){ var axleComponent = ... })()
-            jsx: 'transform',
-            jsxFactory: 'React.createElement',
-            jsxFragment: 'React.Fragment',
-            // УБИРАЕМ `external`, так как это источник зла.
-            // Вместо этого мы "обманем" esbuild с помощью inject и stdin.
-            // Мы говорим ему: "Когда видишь import React, используй `window.React`".
+            globalName: 'axleComponent',
             define: {
                 'React': 'window.React',
                 'ReactDOM': 'window.ReactDOM'
@@ -110,10 +107,9 @@ async function runBuild() {
                 },
             }],
         };
-        // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
 
         if (isWatchMode) {
-            console.log('[axle-build] Starting watchers for server and client component builds...');
+            console.log('[axle-build] Starting watchers...');
             const serverCtx = await esbuild.context(serverOptions);
             const clientCtx = await esbuild.context(clientOptions);
             await Promise.all([serverCtx.watch(), clientCtx.watch()]);
