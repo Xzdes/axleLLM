@@ -1,29 +1,34 @@
 // packages/example-app/manifest/routes/auth.routes.js
 module.exports = {
   // --- VIEW-РОУТЫ ДЛЯ ОТОБРАЖЕНИЯ ФОРМ ---
+  
+  // Роут для страницы входа
   "GET /login": {
     "type": "view",
-    "layout": "main-layout", // БЫЛО: mainLayout
+    "layout": "mainLayout", // ★★★ ИЗМЕНЕНО ★★★
     "reads": ["user"],
     "inject": {
       "header": "header",
-      "pageContent": "auth-layout", // БЫЛО: authLayout
-      "formContent": "login-form"   // БЫЛО: loginForm
+      "pageContent": "authLayout", // ★★★ ИЗМЕНЕНО ★★★
+      "formContent": "loginForm"   // ★★★ ИЗМЕНЕНО ★★★
     }
   },
 
+  // Роут для страницы регистрации
   "GET /register": {
     "type": "view",
-    "layout": "main-layout", // БЫЛО: mainLayout
+    "layout": "mainLayout", // ★★★ ИЗМЕНЕНО ★★★
     "reads": ["user"],
     "inject": {
       "header": "header",
-      "pageContent": "auth-layout", // БЫЛО: authLayout
-      "formContent": "register-form" // БЫЛО: registerForm
+      "pageContent": "authLayout", // ★★★ ИЗМЕНЕНО ★★★
+      "formContent": "registerForm" // ★★★ ИЗМЕНЕНО ★★★
     }
   },
 
-  // --- ACTION-РОУТЫ (здесь изменений нет, но оставляем для полноты) ---
+  // --- ACTION-РОУТЫ (логика шагов остается без изменений) ---
+  
+  // Обработка отправки формы входа
   "POST /auth/login": {
     "type": "action",
     "reads": ["user"],
@@ -43,6 +48,7 @@ module.exports = {
     ]
   },
 
+  // Обработка отправки формы регистрации
   "POST /auth/register": {
     "type": "action",
     "reads": ["user"],
@@ -65,6 +71,7 @@ module.exports = {
     ]
   },
 
+  // Выход из системы
   "GET /auth/logout": {
     "type": "action",
     "steps": [

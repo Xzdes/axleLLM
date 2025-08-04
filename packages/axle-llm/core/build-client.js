@@ -21,44 +21,37 @@ async function runClientBuild() {
             platform: 'browser',
             format: 'iife',
             sourcemap: true,
-            write: false,
+            write: false, // Мы пишем в память, чтобы потом добавить компоненты
         };
         
         const assembleAndWriteBundle = async () => {
             try {
+                // 1. Собираем ядро движка
                 const result = await esbuild.build(buildOptions);
-                // Убираем преамбулу отсюда, так как она оказалась ненадежной.
                 let finalContent = result.outputFiles[0].text;
                 
+                // 2. Просто и надежно добавляем скомпилированные компоненты в конец
                 if (fs.existsSync(clientComponentsDir)) {
-                    const componentFiles = fs.readdirSync(clientComponentsDir).filter(f => f.endsWith('.js'));
+                    const componentFiles = fs.readdirSync(clientComponentsDir);
                     for (const file of componentFiles) {
-                        const componentName = path.basename(file, '.js');
-                        let componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
-                        
-                        componentContent = componentContent.replace(/var React = require\("react"\);/g, '');
-                        componentContent = componentContent.replace(/var import_react = require\("react"\);/g, '');
-
-                        // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
-                        // Создаем "самодостаточный" блок для каждого компонента.
-                        const script = `
+                        if (file.endsWith('.js')) {
+                            const componentName = path.basename(file, '.js');
+                            const componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
+                            
+                            // ★★★ ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ★★★
+                            // Создаем простой и надежный блок для каждого компонента.
+                            // `axleComponent` - это глобальное имя, которое мы задали в `build.js`.
+                            const script = `
 (function() {
   try {
-    // Эта проверка решает гонку состояний.
-    // Если глобального хранилища нет, этот скрипт его создаст.
-    if (!window.axle || !window.axle.components) {
-      window.axle = window.axle || {};
-      window.axle.components = {};
-    }
-    const exports = {}; const module = { exports };
-    ${componentContent.replace('var axleComponent =', 'module.exports =')}
-    if (module.exports) {
-      window.axle.components['${componentName}'] = module.exports.default || module.exports;
+    ${componentContent}
+    if (window.axleComponent) {
+      window.axle.components['${componentName}'] = window.axleComponent.default || window.axleComponent;
     }
   } catch(e) { console.error('Failed to load component ${componentName}:', e); }
 })();`;
-                        // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
-                        finalContent += script;
+                            finalContent += script;
+                        }
                     }
                 }
                 

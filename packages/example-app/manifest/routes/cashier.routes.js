@@ -3,18 +3,18 @@ module.exports = {
   // --- ГЛАВНЫЙ VIEW-РОУТ ПРИЛОЖЕНИЯ ---
   "GET /": {
     "type": "view",
-    "layout": "main-layout",
+    "layout": "mainLayout", // ★★★ ИЗМЕНЕНО ★★★
     "reads": ["user", "receipt", "positions", "viewState"],
     "inject": {
       "header": "header",
-      "pageContent": "cashier-page",
-      "positionsList": "positions-list",
+      "pageContent": "cashierPage",    // ★★★ ИЗМЕНЕНО ★★★
+      "positionsList": "positionsList",// ★★★ ИЗМЕНЕНО ★★★
       "receipt": "receipt"
     },
     "auth": { "required": true, "failureRedirect": "/login" }
   },
 
-  // --- ВНУТРЕННИЙ (HELPER) ACTION-РОУТ ---
+  // --- ВНУТРЕННИЙ (HELPER) ACTION-РОУТ (без изменений в логике) ---
   "recalculateReceiptLogic": {
     "type": "action",
     "internal": true,
@@ -32,7 +32,7 @@ module.exports = {
     "type": "action",
     "reads": ["positions", "receipt"],
     "writes": ["receipt"],
-    "update": "cashier-page", // ★★★ ИЗМЕНЕНО ★★★
+    "update": "cashierPage", // ★★★ ИЗМЕНЕНО ★★★
     "steps": [
       { "set": "context.productToAdd", "to": "data.positions.items.find(p => p.id == body.id)" },
       { "set": "context.itemInReceipt", "to": "data.receipt.items.find(i => i.id == body.id)" },
@@ -52,7 +52,7 @@ module.exports = {
     "type": "action",
     "reads": ["receipt"],
     "writes": ["receipt"],
-    "update": "cashier-page", // ★★★ ИЗМЕНЕНО ★★★
+    "update": "cashierPage", // ★★★ ИЗМЕНЕНО ★★★
     "steps": [
       { "set": "data.receipt.items", "to": "data.receipt.items.filter(i => i.id != body.id)" },
       { "action:run": { "name": "recalculateReceiptLogic" } }
@@ -63,7 +63,7 @@ module.exports = {
     "type": "action",
     "reads": ["receipt"],
     "writes": ["receipt"],
-    "update": "cashier-page", // ★★★ ИЗМЕНЕНО ★★★
+    "update": "cashierPage", // ★★★ ИЗМЕНЕНО ★★★
     "steps": [
       { "set": "data.receipt.items", "to": "[]" },
       { "set": "data.receipt.discountPercent", "to": "0" },
@@ -76,7 +76,7 @@ module.exports = {
     "type": "action",
     "reads": ["receipt"],
     "writes": ["receipt"],
-    "update": "cashier-page", // ★★★ ИЗМЕНЕНО ★★★
+    "update": "cashierPage", // ★★★ ИЗМЕНЕНО ★★★
     "steps": [
       { "set": "data.receipt.statusMessage", "to": "'Неверный купон!'" },
       { "set": "data.receipt.discountPercent", "to": "0" },
@@ -92,7 +92,7 @@ module.exports = {
     "type": "action",
     "reads": ["positions", "viewState"],
     "writes": ["viewState"],
-    "update": "cashier-page", // ★★★ ИЗМЕНЕНО ★★★
+    "update": "cashierPage", // ★★★ ИЗМЕНЕНО ★★★
     "steps": [{ "run": "filterPositions" }]
   },
 
@@ -184,7 +184,7 @@ module.exports = {
   "POST /action/soft-refresh-receipt": { 
     "type": "action", 
     "reads": ["receipt"], 
-    "update": "cashier-page", // ★★★ ИЗМЕНЕНО ★★★
+    "update": "cashierPage", // ★★★ ИЗМЕНЕНО ★★★
     "steps": [] 
-  },
+  }
 };

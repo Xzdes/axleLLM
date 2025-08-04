@@ -3,6 +3,16 @@ const path = require('path');
 const { addIssue, checkFileExists } = require('./utils');
 
 /**
+ * Converts a camelCase string to kebab-case.
+ * Example: 'mainLayout' -> 'main-layout'
+ * @param {string} str The string to convert.
+ * @returns {string} The kebab-cased string.
+ */
+function camelToKebab(str) {
+  return str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+/**
  * Validates the 'components' section of the manifest for a React-based project.
  * @param {object} manifest - The full manifest object.
  * @param {string} appPath - The absolute path to the user's application.
@@ -15,15 +25,22 @@ function validateComponents(manifest, appPath) {
     const config = components[name];
     const category = `Component '${name}'`;
 
-    // In our new React engine, the component definition is just the object.
-    // The key 'name' corresponds to the file name.
-    const templateFilename = `${name}.jsx`;
+    // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+    // 1. Преобразуем camelCase имя компонента из манифеста в kebab-case для поиска файла.
+    //    'mainLayout' => 'main-layout'
+    const kebabCaseName = camelToKebab(name);
+    
+    // 2. Формируем имя файла с расширением.
+    //    'main-layout' => 'main-layout.jsx'
+    const templateFilename = `${kebabCaseName}.jsx`;
+    // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+    
     const templatePath = path.join(componentsDir, templateFilename);
 
-    // 1. Check if the .jsx file exists.
+    // 3. Проверяем, существует ли .jsx файл с kebab-case именем.
     checkFileExists(templatePath, category, `component source file '${templateFilename}'`);
 
-    // 2. Check if a style file is specified and if it exists.
+    // 4. Проверяем, указан ли файл стилей и существует ли он.
     if (typeof config === 'object' && config.style) {
       const styleFilename = config.style;
       if (typeof styleFilename === 'string') {
