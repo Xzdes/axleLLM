@@ -5,14 +5,14 @@
   "description": "An example cashier application built with the axleLLM engine.",
   "author": "Xzdes",
   "main": "node_modules/axle-llm/main.js",
-  "scripts": {
+"scripts": {
     "// --- BUILD SCRIPTS ---": "",
     "build": "node ../axle-llm/core/build.js",
     "watch": "node ../axle-llm/core/build.js --watch",
     "build:client": "node ../axle-llm/core/build-client.js",
     "watch:client": "node ../axle-llm/core/build-client.js --watch",
     "// --- LIFECYCLE SCRIPTS ---": "",
-    "dev": "npm run watch & npm run watch:client & axle-cli dev",
+    "dev": "axle-cli dev",
     "start": "npm run build && npm run build:client && axle-cli start",
     "package": "axle-cli package",
     "seed": "node seed.js"

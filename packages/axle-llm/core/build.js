@@ -49,7 +49,6 @@ async function runBuild() {
             jsx: 'transform',
             jsxFactory: 'React.createElement',
             jsxFragment: 'React.Fragment',
-            logLevel: 'silent',
             plugins: [
                 {
                     name: 'axle-build-reporter',

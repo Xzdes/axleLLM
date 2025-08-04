@@ -4,7 +4,7 @@ module.exports = {
   "GET /login": {
     "type": "view",
     "layout": "main-layout", // БЫЛО: mainLayout
-    "reads": [],
+    "reads": ["user"],
     "inject": {
       "header": "header",
       "pageContent": "auth-layout", // БЫЛО: authLayout
@@ -15,7 +15,7 @@ module.exports = {
   "GET /register": {
     "type": "view",
     "layout": "main-layout", // БЫЛО: mainLayout
-    "reads": [],
+    "reads": ["user"],
     "inject": {
       "header": "header",
       "pageContent": "auth-layout", // БЫЛО: authLayout

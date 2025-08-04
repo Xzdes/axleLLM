@@ -1,28 +1,39 @@
 // packages/axle-llm/core/build-client.js
 const esbuild = require('esbuild');
 const path = require('path');
-const fs = require('fs'); // <--- ИСПРАВЛЕНИЕ ЗДЕСЬ! Убираем '/promises'
+const fs = require('fs');
 
-// This script is also run from the user's app directory
+// Этот скрипт всегда запускается из директории пользовательского приложения
 const appPath = process.cwd();
 const outDir = path.join(appPath, 'public');
 
-// The entry point for our entire client-side application
+// Точка входа для всего нашего клиентского приложения
 const entryPoint = path.resolve(__dirname, '..', 'client', 'engine-client.js');
 
 async function runClientBuild() {
-    console.log('[axle-client-build] Starting client bundle build...');
+    const isWatchMode = process.argv.includes('--watch');
+    console.log(`[axle-client-build] Starting client bundle build... ${isWatchMode ? '(watch mode)' : ''}`);
+
     try {
         await fs.promises.mkdir(outDir, { recursive: true });
 
-        // This is a plugin for esbuild to expose React and ReactDOM globally
-        // so our client-side hydration and rendering can find them without imports.
-        const exposeGlobalsPlugin = {
-            name: 'expose-globals',
+        // Флаг, чтобы сигнал о завершении отправлялся только один раз
+        let isFirstBuild = true;
+
+        const buildReporterPlugin = {
+            name: 'axle-client-build-reporter',
             setup(build) {
+                // Выполняется после каждой сборки (или пересборки в watch-режиме)
                 build.onEnd(result => {
                     const outputPath = path.join(outDir, 'bundle.js');
-                    if (result.errors.length === 0 && fs.existsSync(outputPath)) {
+                    if (result.errors.length > 0) {
+                        // esbuild сам выведет ошибки в stderr, если logLevel не 'silent'
+                        console.error('[axle-client-build] 🚨 Client bundle build failed.');
+                        return;
+                    }
+
+                    if (fs.existsSync(outputPath)) {
+                        // --- Вставка глобальных React и ReactDOM ---
                         let content = fs.readFileSync(outputPath, 'utf8');
                         const prefix = `
 var React = require('react');
@@ -30,9 +41,18 @@ var ReactDOM = require('react-dom/client');
 window.React = React;
 window.ReactDOM = ReactDOM;
 `;
-                        // A placeholder for dynamically loading user components
-                        content += '\nwindow.axle = { components: {} };\n'; 
+                        content += '\nwindow.axle = { components: {} };\n';
                         fs.writeFileSync(outputPath, prefix + content);
+                        // --- Конец вставки ---
+
+                        if (isFirstBuild) {
+                            // Отправляем сигнал только при первой успешной сборке
+                            console.log('// CLIENT-BUILD-COMPLETE //');
+                            isFirstBuild = false; // Сбрасываем флаг
+                        } else {
+                            // Лог для последующих пересборок в watch-режиме
+                            console.log(`[axle-client-build] ✨ Client bundle rebuild complete.`);
+                        }
                     }
                 });
             },
@@ -43,31 +63,30 @@ window.ReactDOM = ReactDOM;
             outfile: path.join(outDir, 'bundle.js'),
             bundle: true,
             platform: 'browser',
-            format: 'iife', // Immediately-invoked Function Expression, safe for browsers
+            format: 'iife',
             sourcemap: true,
-            define: { 'process.env.NODE_ENV': `"${process.argv.includes('--watch') ? 'development' : 'production'}"` },
+            define: { 'process.env.NODE_ENV': `"${isWatchMode ? 'development' : 'production'}"` },
             inject: [path.resolve(__dirname, 'react-shim.js')],
-            plugins: [exposeGlobalsPlugin],
+            plugins: [buildReporterPlugin],
+            // Подавляем стандартные логи esbuild, так как наш плагин теперь управляет выводом
+            logLevel: 'silent', 
         };
-
-        const isWatchMode = process.argv.includes('--watch');
-
+        
         if (isWatchMode) {
-            console.log('[axle-client-build] Running in watch mode...');
             const ctx = await esbuild.context(buildOptions);
             await ctx.watch();
+            console.log('[axle-client-build] Watching for client file changes...');
         } else {
             await esbuild.build(buildOptions);
-            console.log(`[axle-client-build] ✅ Client bundle complete.`);
         }
 
     } catch (error) {
-        console.error('[axle-client-build] 🚨 Client bundle build failed:', error);
+        console.error('[axle-client-build] 🚨 Client bundle build process failed to start:', error);
         process.exit(1);
     }
 }
 
-// We need a shim file for esbuild's inject feature. Let's create it if it doesn't exist.
+// Вспомогательная функция для создания shim-файла
 async function createShimFile() {
     const shimPath = path.resolve(__dirname, 'react-shim.js');
     const content = `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nexport { React, ReactDOM };`;
