@@ -1,5 +1,3 @@
-// packages/axle-llm/client/index.js
-
 // This is the new main entry point for the client bundle.
 // It ensures React is bundled and exposed globally before the engine runs.
 import React from 'react';

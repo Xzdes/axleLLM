@@ -27,11 +27,11 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var auth_layout_exports = {};
 __export(auth_layout_exports, {
-  default: () => MainLayout
+  default: () => AuthLayout
 });
 module.exports = __toCommonJS(auth_layout_exports);
 var import_react = __toESM(require("react"));
-function MainLayout(props) {
-  const { HeaderComponent, PageComponent } = props.components;
-  return /* @__PURE__ */ import_react.default.createElement("div", { id: "layout" }, /* @__PURE__ */ import_react.default.createElement("h1", null, "Layout"), HeaderComponent && /* @__PURE__ */ import_react.default.createElement(HeaderComponent, { ...props }), PageComponent && /* @__PURE__ */ import_react.default.createElement(PageComponent, { ...props }));
+function AuthLayout(props) {
+  const { formContent: FormComponent } = props.components;
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "auth-page-wrapper" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "auth-card" }, FormComponent && /* @__PURE__ */ import_react.default.createElement(FormComponent, { ...props })));
 }

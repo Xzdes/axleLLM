@@ -3,12 +3,10 @@ const esbuild = require('esbuild');
 const path = require('path');
 const fs = require('fs');
 
-// Этот скрипт всегда запускается из директории пользовательского приложения
 const appPath = process.cwd();
 const outDir = path.join(appPath, 'public');
-
-// Точка входа для всего нашего клиентского приложения
-const entryPoint = path.resolve(__dirname, '..', 'client', 'engine-client.js');
+// ★★★ Используем новую, правильную точку входа ★★★
+const entryPoint = path.resolve(__dirname, '..', 'client', 'index.js'); 
 
 async function runClientBuild() {
     const isWatchMode = process.argv.includes('--watch');
@@ -17,42 +15,55 @@ async function runClientBuild() {
     try {
         await fs.promises.mkdir(outDir, { recursive: true });
 
-        // ★★★ НАЧАЛО ИЗМЕНЕНИЙ: Правильная конфигурация esbuild ★★★
+        // Флаг, чтобы сигнал о завершении отправлялся только один раз в режиме --watch
+        let isFirstBuild = true;
 
-        // esbuild соберет React и ReactDOM в бандл благодаря 'inject' и 'bundle: true'.
-        // Затем опция 'footer' добавит наш код в конец бандла, который безопасно
-        // выставит уже сбандленные модули в глобальный scope.
         const buildOptions = {
             entryPoints: [entryPoint],
             outfile: path.join(outDir, 'bundle.js'),
             bundle: true,
             platform: 'browser',
-            format: 'iife', // Immediately-invoked Function Expression, безопасно для браузера
+            format: 'iife', // Самовызывающаяся функция, чтобы не загрязнять глобальный scope
             sourcemap: true,
             define: { 'process.env.NODE_ENV': `"${isWatchMode ? 'development' : 'production'}"` },
-            inject: [path.resolve(__dirname, 'react-shim.js')],
-            // Добавляем "подвал" к нашему бандлу. Этот JS-код выполнится в браузере.
-            // React и ReactDOM к этому моменту уже будут доступны внутри IIFE-обертки бандла.
-            footer: {
-                js: 'window.React = React; window.ReactDOM = ReactDOM; window.axle = { components: {} };',
-            },
+            // Убираем все старые "хаки": inject, banner, footer.
+            // Вся логика теперь находится в точке входа (entryPoint).
         };
-        
+
+        const onBuildEnd = (result) => {
+            if (result.errors.length > 0) {
+                console.error('[axle-client-build] 🚨 Client bundle build failed. See errors above.');
+                // esbuild сам выведет детальные ошибки в stderr
+                return;
+            }
+            
+            if (isFirstBuild) {
+                console.log('[axle-client-build] ✅ Initial client bundle complete.');
+                // Отправляем сигнал оркестратору commands.js
+                console.log('// CLIENT-BUILD-COMPLETE //');
+                isFirstBuild = false;
+            } else {
+                console.log(`[axle-client-build] ✨ Client bundle rebuild complete.`);
+            }
+        };
+
         if (isWatchMode) {
-            const ctx = await esbuild.context(buildOptions);
+            const ctx = await esbuild.context({
+                ...buildOptions,
+                // Добавляем плагин для вывода логов ПОСЛЕ каждой пересборки
+                plugins: [{
+                    name: 'watch-reporter',
+                    setup(build) {
+                        build.onEnd(onBuildEnd);
+                    },
+                }],
+            });
             await ctx.watch();
             console.log('[axle-client-build] Watching for client file changes...');
-            // В режиме --watch сигнал о завершении будет выведен в логах при первой сборке.
-            // Мы будем слушать stdout в commands.js
         } else {
-            await esbuild.build(buildOptions);
-            console.log(`[axle-client-build] ✅ Client bundle complete.`);
+            const result = await esbuild.build(buildOptions);
+            onBuildEnd(result);
         }
-        
-        // Сигнал для оркестратора в commands.js
-        console.log('// CLIENT-BUILD-COMPLETE //');
-        
-        // ★★★ КОНЕЦ ИЗМЕНЕНИЙ ★★★
 
     } catch (error) {
         console.error('[axle-client-build] 🚨 Client bundle build process failed to start:', error);
@@ -60,19 +71,36 @@ async function runClientBuild() {
     }
 }
 
-// Вспомогательная функция для создания shim-файла, если его нет
-async function createShimFile() {
-    const shimPath = path.resolve(__dirname, 'react-shim.js');
-    const content = `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nexport { React, ReactDOM };`;
-    try {
-        await fs.promises.access(shimPath);
-    } catch {
-        await fs.promises.writeFile(shimPath, content, 'utf-8');
+// Убедимся, что новая точка входа существует. Если нет - создадим ее.
+async function createClientEntryPoint() {
+    const entryPointPath = entryPoint;
+    const engineClientPath = './engine-client.js'; // Относительный путь для import
+    const content = `
+// This is the new main entry point for the client bundle.
+// It ensures React is bundled and exposed globally before the engine runs.
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+
+// Make React and ReactDOM globally available for the engine and components.
+window.React = React;
+window.ReactDOM = ReactDOM;
+window.axle = { components: {} }; // Initialize the component namespace.
+
+// Now that globals are set, run the actual engine logic.
+import '${engineClientPath}';
+`;
+    const clientDir = path.dirname(entryPointPath);
+    if (!fs.existsSync(clientDir)) {
+        fs.mkdirSync(clientDir, { recursive: true });
+    }
+    if (!fs.existsSync(entryPointPath)) {
+        fs.writeFileSync(entryPointPath, content.trim(), 'utf-8');
+        console.log(`[axle-client-build] Created client entry point at ${entryPointPath}`);
     }
 }
 
 async function main() {
-    await createShimFile();
+    await createClientEntryPoint();
     await runClientBuild();
 }
 

@@ -2,17 +2,16 @@
 import React from 'react';
 
 export default function CashierPage(props) {
-  // Получаем ТИПЫ компонентов
-  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props;
+  // ★★★ ИСПРАВЛЕНИЕ ★★★
+  // Извлекаем компоненты из props.components
+  const { positionsList: PositionsListComponent, receipt: ReceiptComponent } = props.components;
 
   return (
     <div className="cashier-page-wrapper">
       <div id="positionsList-container">
-        {/* Создаем элемент из типа, передавая ему ВСЕ props */}
         {PositionsListComponent && <PositionsListComponent {...props} />}
       </div>
       <div id="receipt-container">
-        {/* Создаем элемент из типа, передавая ему ВСЕ props */}
         {ReceiptComponent && <ReceiptComponent {...props} />}
       </div>
     </div>

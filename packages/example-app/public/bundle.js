@@ -5,9 +5,6 @@
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __esm = (fn, res) => function __init() {
-    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-  };
   var __commonJS = (cb, mod) => function __require() {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
@@ -32,7 +29,6 @@
   var require_react_development = __commonJS({
     "../../node_modules/react/cjs/react.development.js"(exports, module) {
       "use strict";
-      init_react_shim();
       if (true) {
         (function() {
           "use strict";
@@ -1907,7 +1903,6 @@
   var require_react = __commonJS({
     "../../node_modules/react/index.js"(exports, module) {
       "use strict";
-      init_react_shim();
       if (false) {
         module.exports = null;
       } else {
@@ -1920,7 +1915,6 @@
   var require_scheduler_development = __commonJS({
     "../../node_modules/scheduler/cjs/scheduler.development.js"(exports) {
       "use strict";
-      init_react_shim();
       if (true) {
         (function() {
           "use strict";
@@ -2371,7 +2365,6 @@
   var require_scheduler = __commonJS({
     "../../node_modules/scheduler/index.js"(exports, module) {
       "use strict";
-      init_react_shim();
       if (false) {
         module.exports = null;
       } else {
@@ -2384,7 +2377,6 @@
   var require_react_dom_development = __commonJS({
     "../../node_modules/react-dom/cjs/react-dom.development.js"(exports) {
       "use strict";
-      init_react_shim();
       if (true) {
         (function() {
           "use strict";
@@ -7569,7 +7561,7 @@
           var root = null;
           var startText = null;
           var fallbackText = null;
-          function initialize(nativeEventTarget) {
+          function initialize2(nativeEventTarget) {
             root = nativeEventTarget;
             startText = getText();
             return true;
@@ -8047,7 +8039,7 @@
             }
             if (useFallbackCompositionData && !isUsingKoreanIME(nativeEvent)) {
               if (!isComposing && eventType === "onCompositionStart") {
-                isComposing = initialize(nativeEventTarget);
+                isComposing = initialize2(nativeEventTarget);
               } else if (eventType === "onCompositionEnd") {
                 if (isComposing) {
                   fallbackData = getData();
@@ -23127,7 +23119,7 @@
             }
           }
           ReactDOMHydrationRoot.prototype.unstable_scheduleHydration = scheduleHydration;
-          function hydrateRoot(container, initialChildren, options2) {
+          function hydrateRoot2(container, initialChildren, options2) {
             if (!isValidContainer(container)) {
               throw new Error("hydrateRoot(...): Target container is not a DOM element.");
             }
@@ -23470,7 +23462,7 @@
                 error('You are importing hydrateRoot from "react-dom" which is not supported. You should instead import it from "react-dom/client".');
               }
             }
-            return hydrateRoot(container, initialChildren, options2);
+            return hydrateRoot2(container, initialChildren, options2);
           }
           function flushSync$1(fn) {
             {
@@ -23520,7 +23512,6 @@
   var require_react_dom = __commonJS({
     "../../node_modules/react-dom/index.js"(exports, module) {
       "use strict";
-      init_react_shim();
       if (false) {
         checkDCE();
         module.exports = null;
@@ -23534,7 +23525,6 @@
   var require_client = __commonJS({
     "../../node_modules/react-dom/client.js"(exports) {
       "use strict";
-      init_react_shim();
       var m = require_react_dom();
       if (false) {
         exports.createRoot = m.createRoot;
@@ -23562,170 +23552,166 @@
     }
   });
 
-  // ../axle-llm/core/react-shim.js
-  var import_react, import_client;
-  var init_react_shim = __esm({
-    "../axle-llm/core/react-shim.js"() {
-      import_react = __toESM(require_react());
-      import_client = __toESM(require_client());
-    }
-  });
+  // ../axle-llm/client/index.js
+  var import_react = __toESM(require_react());
+  var import_client = __toESM(require_client());
 
   // ../axle-llm/client/engine-client.js
-  init_react_shim();
-  (function() {
-    "use strict";
-    let socketId = null;
-    let currentActionController = null;
-    let ws = null;
-    const componentRoots = /* @__PURE__ */ new Map();
-    function initialize() {
-      console.log("[axle-client] Initializing React-powered client...");
-      hydrateRoot();
-      const supportedEvents = ["click", "submit", "input", "change"];
-      supportedEvents.forEach((eventType) => {
-        document.body.addEventListener(eventType, handleAction, true);
+  var socketId = null;
+  var currentActionController = null;
+  var ws = null;
+  var componentRoots = /* @__PURE__ */ new Map();
+  function initialize() {
+    console.log("[axle-client] Initializing React-powered client...");
+    hydrateRoot();
+    const supportedEvents = ["click", "submit", "input", "change"];
+    supportedEvents.forEach((eventType) => {
+      document.body.addEventListener(eventType, handleAction, true);
+    });
+    initializeWebSocket();
+    console.log("[axle-client] Initialized successfully.");
+  }
+  function hydrateRoot() {
+    const rootElement = document.getElementById("root");
+    if (!rootElement) {
+      console.error('[axle-client] CRITICAL: Root element with id="root" not found. Hydration failed.');
+      return;
+    }
+    try {
+      if (typeof window.React === "undefined" || typeof window.ReactDOM === "undefined") {
+        console.error("[axle-client] CRITICAL: React or ReactDOM not found on window object.");
+        return;
+      }
+      const ClientAppShell = () => null;
+      window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(ClientAppShell, { initialData: window.__INITIAL_DATA__ }));
+      console.log("[axle-client] Hydration complete.");
+    } catch (e) {
+      console.error("[axle-client] CRITICAL: Hydration failed.", e);
+    }
+  }
+  async function handleAction(event) {
+    const element = event.target.closest("[atom-action]");
+    if (!element)
+      return;
+    const requiredEventType = element.getAttribute("atom-event") || (element.tagName === "FORM" ? "submit" : "click");
+    if (event.type !== requiredEventType)
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    const action = element.getAttribute("atom-action");
+    const targetSelector = element.getAttribute("atom-target");
+    if (!action)
+      return;
+    if (requiredEventType === "input" && currentActionController) {
+      currentActionController.abort();
+    }
+    currentActionController = new AbortController();
+    const [method, url] = action.split(" ");
+    try {
+      const response = await fetch(url, {
+        method: method.toUpperCase(),
+        headers: { "Content-Type": "application/json", "X-Socket-Id": socketId },
+        body: method.toUpperCase() !== "GET" ? getActionBody(element) : void 0,
+        signal: currentActionController.signal
       });
-      initializeWebSocket();
-      console.log("[axle-client] Initialized successfully.");
-    }
-    function hydrateRoot() {
-      const rootElement = document.getElementById("root");
-      if (!rootElement) {
-        console.error('[axle-client] CRITICAL: Root element with id="root" not found. Hydration failed.');
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      const payload = await response.json();
+      processServerPayload(payload, targetSelector);
+    } catch (error) {
+      if (error.name === "AbortError") {
+        console.log("[axle-client] Fetch aborted for debouncing (this is expected).");
         return;
       }
+      console.error(`[axle-client] Action failed for "${action}":`, error);
+    }
+  }
+  function processServerPayload(payload, targetSelector) {
+    if (payload.redirect) {
+      window.location.href = payload.redirect;
+      return;
+    }
+    if (payload.update) {
+      const componentToUpdate = payload.update;
+      const newProps = payload.props;
+      const targetElement = document.querySelector(targetSelector);
+      if (!targetElement) {
+        console.error(`[axle-client] Target element "${targetSelector}" for component "${componentToUpdate}" not found.`);
+        return;
+      }
+      const Component = window.axle.components[componentToUpdate];
+      if (!Component) {
+        console.error(`[axle-client] Component definition for '${componentToUpdate}' not found.`);
+        return;
+      }
+      let root = componentRoots.get(targetSelector);
+      if (!root) {
+        root = window.ReactDOM.createRoot(targetElement);
+        componentRoots.set(targetSelector, root);
+      }
+      root.render(window.React.createElement(Component, newProps));
+    }
+  }
+  function getActionBody(element) {
+    const form = element.closest("form");
+    const data = {};
+    if (form) {
+      const formData = new FormData(form);
+      for (const [key, value] of formData.entries()) {
+        data[key] = value;
+      }
+    }
+    const payloadAttr = element.getAttribute("atom-payload");
+    if (payloadAttr) {
       try {
-        if (typeof import_react.default === "undefined" || typeof import_client.default === "undefined") {
-          console.error("[axle-client] CRITICAL: React or ReactDOM not found in bundle scope. Build process may be misconfigured.");
-          return;
-        }
-        const App = () => import_react.default.createElement("div", { dangerouslySetInnerHTML: { __html: rootElement.innerHTML } });
-        import_client.default.hydrateRoot(rootElement, import_react.default.createElement(App, { initialData: window.__INITIAL_DATA__ }));
-        console.log("[axle-client] Hydration complete.");
+        Object.assign(data, JSON.parse(payloadAttr));
       } catch (e) {
-        console.error("[axle-client] CRITICAL: Hydration failed.", e);
+        console.error("Invalid atom-payload JSON:", payloadAttr);
       }
     }
-    async function handleAction(event) {
-      const element = event.target.closest("[atom-action]");
-      if (!element)
-        return;
-      const requiredEventType = element.getAttribute("atom-event") || (element.tagName === "FORM" ? "submit" : "click");
-      if (event.type !== requiredEventType)
-        return;
-      event.preventDefault();
-      event.stopPropagation();
-      const action = element.getAttribute("atom-action");
-      const targetSelector = element.getAttribute("atom-target");
-      if (!action)
-        return;
-      if (requiredEventType === "input" && currentActionController) {
-        currentActionController.abort();
-      }
-      currentActionController = new AbortController();
-      const [method, url] = action.split(" ");
+    if (element.name && element.value !== void 0 && !data.hasOwnProperty(element.name)) {
+      data[element.name] = element.value;
+    }
+    return JSON.stringify(data);
+  }
+  function initializeWebSocket() {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}`;
+    ws = new WebSocket(wsUrl);
+    ws.onopen = () => console.log("[axle-client] WebSocket connection established.");
+    ws.onmessage = (message) => {
       try {
-        const response = await fetch(url, {
-          method: method.toUpperCase(),
-          headers: { "Content-Type": "application/json", "X-Socket-Id": socketId },
-          body: method.toUpperCase() !== "GET" ? getActionBody(element) : void 0,
-          signal: currentActionController.signal
-        });
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
+        const data = JSON.parse(message.data);
+        if (data.type === "socket_id_assigned") {
+          socketId = data.id;
+          console.log(`[axle-client] WebSocket ID assigned: ${socketId}`);
         }
-        const payload = await response.json();
-        processServerPayload(payload, targetSelector);
-      } catch (error) {
-        if (error.name === "AbortError") {
-          console.log("[axle-client] Fetch aborted for debouncing (this is expected).");
-          return;
-        }
-        console.error(`[axle-client] Action failed for "${action}":`, error);
+      } catch (e) {
+        console.error("[axle-client] Failed to handle WebSocket message:", e);
       }
-    }
-    function processServerPayload(payload, targetSelector) {
-      if (payload.redirect) {
-        window.location.href = payload.redirect;
-        return;
-      }
-      if (payload.update) {
-        const componentToUpdate = payload.update;
-        const newProps = payload.props;
-        const targetElement = document.querySelector(targetSelector);
-        if (!targetElement) {
-          console.error(`[axle-client] Target element "${targetSelector}" for component "${componentToUpdate}" not found.`);
-          return;
-        }
-        const Component = window.axle.components[componentToUpdate];
-        if (!Component) {
-          console.error(`[axle-client] Component definition for '${componentToUpdate}' not found.`);
-          return;
-        }
-        let root = componentRoots.get(targetSelector);
-        if (!root) {
-          root = import_client.default.createRoot(targetElement);
-          componentRoots.set(targetSelector, root);
-        }
-        root.render(import_react.default.createElement(Component, newProps));
-      }
-    }
-    function getActionBody(element) {
-      const form = element.closest("form");
-      const data = {};
-      if (form) {
-        const formData = new FormData(form);
-        for (const [key, value] of formData.entries()) {
-          data[key] = value;
-        }
-      }
-      const payloadAttr = element.getAttribute("atom-payload");
-      if (payloadAttr) {
-        try {
-          Object.assign(data, JSON.parse(payloadAttr));
-        } catch (e) {
-          console.error("Invalid atom-payload JSON:", payloadAttr);
-        }
-      }
-      if (element.name && element.value !== void 0 && !data.hasOwnProperty(element.name)) {
-        data[element.name] = element.value;
-      }
-      return JSON.stringify(data);
-    }
-    function initializeWebSocket() {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}`;
-      ws = new WebSocket(wsUrl);
-      ws.onopen = () => console.log("[axle-client] WebSocket connection established.");
-      ws.onmessage = (message) => {
-        try {
-          const data = JSON.parse(message.data);
-          if (data.type === "socket_id_assigned") {
-            socketId = data.id;
-            console.log(`[axle-client] WebSocket ID assigned: ${socketId}`);
-          }
-        } catch (e) {
-          console.error("[axle-client] Failed to handle WebSocket message:", e);
-        }
-      };
-      ws.onclose = () => {
-        console.log("[axle-client] WebSocket connection closed. Reconnecting in 3 seconds...");
-        socketId = null;
-        ws = null;
-        setTimeout(initializeWebSocket, 3e3);
-      };
-      ws.onerror = (error) => {
-        console.error("[axle-client] WebSocket error:", error);
-        ws.close();
-      };
-    }
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", initialize);
-    } else {
-      initialize();
-    }
-  })();
+    };
+    ws.onclose = () => {
+      console.log("[axle-client] WebSocket connection closed. Reconnecting in 3 seconds...");
+      socketId = null;
+      ws = null;
+      setTimeout(initializeWebSocket, 3e3);
+    };
+    ws.onerror = (error) => {
+      console.error("[axle-client] WebSocket error:", error);
+      ws.close();
+    };
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialize);
+  } else {
+    initialize();
+  }
+
+  // ../axle-llm/client/index.js
+  window.React = import_react.default;
+  window.ReactDOM = import_client.default;
+  window.axle = { components: {} };
 })();
 /*! Bundled license information:
 
@@ -23775,5 +23761,4 @@ react-dom/cjs/react-dom.development.js:
    * @license Modernizr 3.0.0pre (Custom Build) | MIT
    *)
 */
-window.React = React; window.ReactDOM = ReactDOM; window.axle = { components: {} };
 //# sourceMappingURL=bundle.js.map
