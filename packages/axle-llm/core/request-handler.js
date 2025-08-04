@@ -69,7 +69,7 @@ class RequestHandler {
         const dataContext = await this.connectorManager.getContext(routeConfig.reads || []);
         const finalDataContext = { ...dataContext, user };
         const html = await this.renderer.renderView(routeConfig, finalDataContext, url);
-        this._sendResponse(res, 200, html, 'text/html; charset=utf-8');
+        this._sendResponse(res, 200, html, 'text/html; charset=utf-8'); // <-- Правильный тип контента для HTML
       } else if (routeConfig.type === 'action') {
         const body = await this._parseBody(req);
         const socketId = req.headers['x-socket-id'] || null;
@@ -95,7 +95,6 @@ class RequestHandler {
     try {
         await engine.run(routeConfig.steps || []);
     } catch (engineError) {
-        console.error(`[RequestHandler-runAction] ActionEngine failed for route '${context.routeName}'. Error:`, engineError.message);
         if (res && !res.headersSent) {
             this._sendResponse(res, 500, { error: 'Action execution failed', details: engineError.message }, 'application/json');
         }
@@ -115,20 +114,14 @@ class RequestHandler {
     let sessionCookie = null;
 
     if (this.authEngine) {
-        if (internalActions.loginUser) {
-          sessionCookie = await this.authEngine.createSessionCookie(internalActions.loginUser);
-        }
-        if (internalActions.logout) {
-          sessionCookie = await this.authEngine.clearSessionCookie(req);
-        }
+        if (internalActions.loginUser) sessionCookie = await this.authEngine.createSessionCookie(internalActions.loginUser);
+        if (internalActions.logout) sessionCookie = await this.authEngine.clearSessionCookie(req);
     }
     
     for (const key of (routeConfig.writes || [])) {
       if (finalContext.data[key]) {
         await this.connectorManager.getConnector(key).write(finalContext.data[key]);
-        if (this.socketEngine) {
-            await this.socketEngine.notifyOnWrite(key, finalContext.socketId);
-        }
+        if (this.socketEngine) await this.socketEngine.notifyOnWrite(key, finalContext.socketId);
       }
     }
 
@@ -137,15 +130,15 @@ class RequestHandler {
       responsePayload.redirect = internalActions.redirect;
     } else if (routeConfig.update) {
       const componentName = routeConfig.update;
-      const componentConfig = this.manifest.components[componentName];
-      // ★★★ НАЧАЛО ИСПРАВЛЕНИЯ ★★★
-      // 1. Определяем ВСЕ коннекторы, которые могут понадобиться обновляемому компоненту и его дочерним элементам.
-      //    Это самая надежная стратегия.
-      const allRequiredConnectors = this._findAllRequiredConnectors(componentName);
-
-      // 2. Формируем props, включая ВСЕ эти коннекторы из финального контекста.
+      
+      // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+      // 1. Находим родительский view-роут, чтобы понять, какой полный набор данных был у страницы.
+      const parentViewRoute = this._findParentViewRouteForComponent(componentName);
+      const allAvailableConnectors = parentViewRoute ? parentViewRoute.reads || [] : [];
+      
+      // 2. Собираем ПОЛНЫЙ и АКТУАЛЬНЫЙ набор данных для страницы.
       const propsData = {};
-      for (const connectorName of allRequiredConnectors) {
+      for (const connectorName of allAvailableConnectors) {
           if(finalContext.data[connectorName]) {
             propsData[connectorName] = finalContext.data[connectorName];
           }
@@ -154,64 +147,46 @@ class RequestHandler {
       responsePayload = {
         update: componentName,
         props: {
-            data: propsData, // <-- Теперь здесь полный набор данных для компонента
+            data: propsData, // <-- Теперь здесь ВСЕ данные, которые были на странице
             user: finalContext.user,
             globals: this.manifest.globals || {},
             url: this.renderer._getUrlContext(req ? new URL(req.url, `http://${req.headers.host}`) : null)
         },
       };
-      // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
+      // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
     }
     
     if (res && !res.headersSent) {
-      if (sessionCookie) {
-        res.setHeader('Set-Cookie', sessionCookie);
-      }
+      if (sessionCookie) res.setHeader('Set-Cookie', sessionCookie);
       this._sendResponse(res, 200, responsePayload, 'application/json');
     } 
   }
 
-  // ★★★ НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ★★★
-  /**
-   * Рекурсивно находит все зависимости коннекторов для компонента и его дочерних элементов.
-   * @param {string} componentName - Имя корневого компонента для проверки.
-   * @returns {Set<string>} - Уникальный набор имен всех необходимых коннекторов.
-   */
-  _findAllRequiredConnectors(componentName) {
-    const visited = new Set();
-    const required = new Set();
-    
-    const findRecursive = (name) => {
-        if (!name || visited.has(name)) return;
-        visited.add(name);
-
+  _findParentViewRouteForComponent(componentName) {
+    for (const key in this.manifest.routes) {
+        const route = this.manifest.routes[key];
+        if (route.type === 'view') {
+            const injectedComponents = Object.values(route.inject || {});
+            if (route.layout === componentName || injectedComponents.includes(componentName)) {
+                return route;
+            }
+        }
+    }
+    // Ищем компонент в качестве дочернего для другого компонента (задел на будущее)
+    for (const name in this.manifest.components) {
         const config = this.manifest.components[name];
-        if (!config) return;
-
-        // Добавляем зависимости самого компонента
-        (config.schema?.requires || []).forEach(conn => required.add(conn));
-        
-        // Рекурсивно проверяем зависимости вложенных компонентов (если они определены в манифесте)
-        // В нашем случае это не используется, но это хороший задел на будущее.
-        // const injectedComponents = this._getInjectedComponentsFor(name);
-        // injectedComponents.forEach(childName => findRecursive(childName));
-    };
-
-    findRecursive(componentName);
-    
-    // Добавляем 'user' по умолчанию, так как он часто нужен (например, в header).
-    required.add('user'); 
-    
-    return required;
+        if (config.inject && Object.values(config.inject).includes(componentName)) {
+            return this._findParentViewRouteForComponent(name);
+        }
+    }
+    return null;
   }
 
-
   _findRoute(method, pathname) {
-    const routes = this.manifest.routes || {};
     const key = `${method} ${pathname}`;
-    if (routes[key]) {
-      routes[key].key = key;
-      return routes[key];
+    if (this.manifest.routes[key]) {
+      this.manifest.routes[key].key = key;
+      return this.manifest.routes[key];
     }
     return null;
   }
@@ -222,9 +197,7 @@ class RequestHandler {
       req.on('data', chunk => { body += chunk.toString(); });
       req.on('end', () => {
         try {
-          if (!body) return resolve({});
-          if (req.headers['content-type']?.includes('application/json')) return resolve(JSON.parse(body));
-          resolve({});
+          resolve(body ? JSON.parse(body) : {});
         } catch (e) { reject(e); }
       });
       req.on('error', err => reject(err));
@@ -235,6 +208,7 @@ class RequestHandler {
     if (res.headersSent) {
       return;
     }
+    // ★★★ ИСПРАВЛЕНИЕ: Отправляем данные как есть, если это не объект. JSON.stringify только для объектов.
     const body = (typeof data === 'object' && data !== null) ? JSON.stringify(data) : String(data);
     res.writeHead(statusCode, { 
         'Content-Type': contentType, 
