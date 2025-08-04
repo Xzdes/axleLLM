@@ -11,7 +11,7 @@ function PositionItem({ item }) {
       <button
         type="button"
         atom-action="POST /action/addItem"
-        atom-target="#receipt-container"
+        atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
         name="id"
         value={item.id}
       >
@@ -50,7 +50,7 @@ export default function PositionsList({ data }) {
           placeholder="Найти товар..." 
           defaultValue={viewState.query} // Use defaultValue for uncontrolled components
           atom-action="POST /action/filterPositions"  
-          atom-target="#positionsList-container"
+          atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
           atom-event="input"
         />
       </div>

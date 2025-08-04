@@ -12,7 +12,7 @@ function ReceiptItem({ item }) {
         className="remove-btn"
         type="button"
         atom-action="POST /action/removeItem"
-        atom-target="#receipt-container"
+        atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
         name="id"
         value={item.id}
       >
@@ -37,7 +37,7 @@ export default function Receipt({ data }) {
       atom-socket="receipt-updates"
       atom-on-event="receipt-changed"
       atom-action="POST /action/soft-refresh-receipt"
-      atom-target="#receipt-container"
+      atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
     >
       <h3>Чек</h3>
       
@@ -67,7 +67,7 @@ export default function Receipt({ data }) {
         <p className="final-total"><b>Итого:</b> <b>{receipt.finalTotal || '0.00'} руб.</b></p>
       </div>
 
-      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#receipt-container">
+      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#pageContent-container"> {/* ★★★ ИЗМЕНЕНО ★★★ */}
         <input type="text" name="coupon_code" placeholder="Промокод" />
         <button type="submit" className="action-button">Применить</button>
       </form>
@@ -77,7 +77,7 @@ export default function Receipt({ data }) {
         type="button"
         className="action-button danger"
         atom-action="POST /action/clearReceipt"
-        atom-target="#receipt-container"
+        atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
       >
         Очистить чек
       </button>
