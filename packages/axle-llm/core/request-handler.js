@@ -5,6 +5,22 @@ const fs = require('fs');
 const { ActionEngine } = require('./action-engine');
 const { AuthEngine } = require('./auth-engine');
 
+// ★★★ НАЧАЛО ИЗМЕНЕНИЙ (1/2) ★★★
+// Helper для определения MIME-типа по расширению файла
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+// ★★★ КОНЕЦ ИЗМЕНЕНИЙ (1/2) ★★★
+
 class RequestHandler {
   constructor(manifest, connectorManager, assetLoader, renderer, appPath) {
     this.manifest = manifest;
@@ -33,14 +49,25 @@ class RequestHandler {
       const url = new URL(req.url, `http://${req.headers.host}`);
       console.log(`\n[RequestHandler] --> Handling request: ${req.method} ${url.pathname}`);
       
-      if (url.pathname === '/public/bundle.js') {
-        const bundlePath = path.join(this.appPath, 'public', 'bundle.js');
+      // ★★★ НАЧАЛО ИЗМЕНЕНИЙ (2/2) ★★★
+      // Улучшенная логика для статических файлов
+      if (url.pathname.startsWith('/public/')) {
+        const filePath = path.join(this.appPath, url.pathname);
         try {
-          const scriptContent = fs.readFileSync(bundlePath, 'utf-8');
-          this._sendResponse(res, 200, scriptContent, 'application/javascript');
-        } catch (e) { this._sendResponse(res, 404, 'Client bundle not found.'); }
-        return;
+          // Проверяем, что файл существует и не является директорией
+          const stats = await fs.promises.stat(filePath);
+          if (stats.isFile()) {
+            const ext = path.extname(filePath);
+            const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+            const fileContent = await fs.promises.readFile(filePath);
+            this._sendResponse(res, 200, fileContent, contentType);
+            return;
+          }
+        } catch (e) {
+          // Файл не найден, ничего страшного, просто идем дальше
+        }
       }
+      // ★★★ КОНЕЦ ИЗМЕНЕНИЙ (2/2) ★★★
 
       const routeConfig = this._findRoute(req.method, url.pathname);
       if (!routeConfig) { return this._sendResponse(res, 404, 'Not Found'); }
@@ -70,6 +97,8 @@ class RequestHandler {
     }
   }
   
+  // ... (остальная часть файла без изменений)
+  
   async runAction(context, req = null, res = null) {
     const routeConfig = this.manifest.routes[context.routeName];
     if (!routeConfig) throw new Error(`Action route '${context.routeName}' not found.`);
@@ -89,7 +118,6 @@ class RequestHandler {
     const finalContext = engine.context;
     const internalActions = finalContext._internal || {};
 
-    // ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ: ПЕРЕПИСЫВАЕМ ЛОГИКУ "ПРОДОЛЖЕНИЯ" ★★★
     if (internalActions.awaitingBridgeCall) {
         const continuation = async (resultFromClient) => {
             console.log(`[RequestHandler] Continuing action '${context.routeName}' after awaitable call.`);
@@ -99,9 +127,8 @@ class RequestHandler {
                 engine._setValue(resultTo, resultFromClient);
             }
             
-            // "Снимаем с паузы" и готовимся к продолжению
             engine.context._internal.interrupt = false;
-            engine.context._internal.resumingFrom = step; // Указываем, с какого шага продолжить
+            engine.context._internal.resumingFrom = step;
 
             await engine.run(routeConfig.steps || []);
             
@@ -186,7 +213,7 @@ class RequestHandler {
 
   _sendResponse(res, statusCode, data, contentType = 'text/plain') {
     if (res.headersSent) return;
-    const body = (typeof data === 'object' && data !== null) ? JSON.stringify(data) : String(data);
+    const body = (typeof data === 'object' && data !== null && !Buffer.isBuffer(data)) ? JSON.stringify(data) : data;
     res.writeHead(statusCode, { 'Content-Type': contentType, 'Content-Length': Buffer.byteLength(body) }).end(body);
   }
 }
