@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "A new monorepo project powered by axleLLM",
+  "author": "",
   "scripts": {
     "dev": "npm run dev --workspace=app",
     "start": "npm run start --workspace=app",
@@ -14,6 +15,6 @@
   ],
   "devDependencies": {
     "electron": "37.2.5",
-    "electron-builder": "26.0.19"
+    "electron-builder": "26.0.12"
   }
 }

@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "electron": "37.2.5",
-    "electron-builder": "26.0.19"
+    "electron-builder": "26.0.12"
   },
   "build": {
     "appId": "com.axlellm.example-app",

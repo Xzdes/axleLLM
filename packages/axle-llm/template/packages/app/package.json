@@ -1,6 +1,6 @@
 {
   "name": "app",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "A new desktop application powered by axleLLM",
   "author": "",
@@ -12,8 +12,10 @@
     "seed": "echo 'Seed script not implemented yet.'"
   },
   "dependencies": {
-   "axle-llm": "file:../axle-llm",
-    "wise-json-db": "6.0.2"
+    "axle-llm": "file:../axle-llm",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "wise-json-db": "^6.0.2"
   },
   "build": {
     "appId": "com.axlellm.<APP_NAME>",
