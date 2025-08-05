@@ -8,13 +8,9 @@ const getPort = require('get-port');
 
 const isDev = process.argv.includes('--dev');
 
-// ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ: ЖЕЛЕЗОБЕТОННЫЙ ПУТЬ ★★★
-// Эта логика будет работать и в режиме разработки, и в упакованном приложении.
-// app.getAppPath() в упакованном приложении указывает на корень архива app.asar,
-// где лежат все файлы нашего приложения. Это именно то, что нам нужно.
 const appPath = isDev 
-  ? process.argv[2] // В режиме dev мы передаем путь как аргумент
-  : app.getAppPath(); // В упакованном приложении берем корень app.asar
+  ? process.argv[2]
+  : app.getAppPath();
 
 if (!appPath) {
   dialog.showErrorBox('Critical Error', 'Application path could not be determined. Exiting.');
@@ -29,11 +25,15 @@ function setupBridge(win) {
     const [apiGroup, apiMethod] = api.split('.');
     if (!apiGroup || !apiMethod) throw new Error(`[axle-bridge] Invalid API format: ${api}`);
     
-    const isDialogAllowed = manifest.bridge?.dialogs?.[apiMethod] === true;
-    const isShellAllowed = manifest.bridge?.shell?.[apiMethod] === true;
-    const isCustomAllowed = manifest.bridge?.custom?.[apiGroup] && typeof require(path.join(appPath, 'app', 'bridge', manifest.bridge.custom[apiGroup]))[apiMethod] === 'function';
+    const bridgeManifest = manifest.bridge || {};
+    const isDialogAllowed = bridgeManifest.dialogs?.[apiMethod] === true;
+    const isShellAllowed = bridgeManifest.shell?.[apiMethod] === true;
+    // ★★★ НАЧАЛО ИЗМЕНЕНИЙ (1/3) ★★★
+    const isWindowAllowed = bridgeManifest.window?.[apiMethod] === true;
+    // ★★★ КОНЕЦ ИЗМЕНЕНИЙ (1/3) ★★★
+    const isCustomAllowed = bridgeManifest.custom?.[apiGroup] && typeof require(path.join(appPath, 'app', 'bridge', bridgeManifest.custom[apiGroup]))[apiMethod] === 'function';
     
-    if (!isDialogAllowed && !isShellAllowed && !isCustomAllowed) {
+    if (!isDialogAllowed && !isShellAllowed && !isCustomAllowed && !isWindowAllowed) {
       throw new Error(`[axle-bridge] API call blocked: '${api}' is not whitelisted.`);
     }
 
@@ -42,9 +42,21 @@ function setupBridge(win) {
       case 'shell':
         if(apiMethod === 'openExternal'){ await shell.openExternal(args.url || args); return { success: true }; }
         throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group '${apiGroup}'.`);
+      
+      // ★★★ НАЧАЛО ИЗМЕНЕНИЙ (2/3) ★★★
+      // Добавляем новую группу API для управления окном
+      case 'window':
+        switch (apiMethod) {
+          case 'minimize': win.minimize(); return { success: true };
+          case 'maximize': win.isMaximized() ? win.unmaximize() : win.maximize(); return { success: true };
+          case 'close': win.close(); return { success: true };
+          default: throw new Error(`[axle-bridge] Unknown method '${apiMethod}' in API group 'window'.`);
+        }
+      // ★★★ КОНЕЦ ИЗМЕНЕНИЙ (2/3) ★★★
+
       case 'custom':
         const [_, moduleAlias, methodName] = api.split('.');
-        const modulePath = path.join(appPath, 'app', 'bridge', manifest.bridge.custom[moduleAlias]);
+        const modulePath = path.join(appPath, 'app', 'bridge', bridgeManifest.custom[moduleAlias]);
         const customModule = require(modulePath);
         return await customModule[methodName](...(Array.isArray(args) ? args : [args]));
       default:
@@ -56,13 +68,40 @@ function setupBridge(win) {
 async function createWindow() {
   const launchConfig = manifest.launch || {};
   const windowConfig = launchConfig.window || {};
-  const config = { width: 1024, height: 768, devtools: false, ...windowConfig };
+  
+  // Устанавливаем умные дефолты
+  const config = { 
+    width: 1024, 
+    height: 768, 
+    devtools: false, 
+    frame: true, // По умолчанию рамка есть
+    titleBarStyle: 'default', // Стандартный title bar
+    ...windowConfig 
+  };
   
   const win = new BrowserWindow({
-    width: config.width, height: config.height,
+    width: config.width, 
+    height: config.height,
     title: launchConfig.title || 'axleLLM Application',
     show: false,
-    webPreferences: { preload: path.join(__dirname, 'core', 'preload.js') },
+    // ★★★ НАЧАЛО ИЗМЕНЕНИЙ (3/3) ★★★
+    // Применяем новые настройки из манифеста
+    frame: config.frame,
+    titleBarStyle: config.titleBarStyle,
+    // Для кастомных title bar'ов на Windows нужны эти опции
+    ...(config.titleBarStyle === 'hidden' && process.platform === 'win32' && {
+      titleBarOverlay: {
+        color: config.titleBarColor || '#ffffff',
+        symbolColor: config.titleBarSymbolColor || '#000000',
+        height: config.titleBarHeight || 32
+      }
+    }),
+    // ★★★ КОНЕЦ ИЗМЕНЕНИЙ (3/3) ★★★
+    webPreferences: { 
+      preload: path.join(__dirname, 'core', 'preload.js'),
+      // Управляем DevTools через webPreferences для большей безопасности
+      devtools: isDev && config.devtools 
+    },
   });
 
   win.on('ready-to-show', () => { win.show(); });
@@ -89,6 +128,8 @@ async function createWindow() {
     app.quit();
   }
 
+  // Логика открытия DevTools остается прежней, но теперь она надежнее,
+  // так как управляется через webPreferences.
   if (isDev && config.devtools) {
     win.webContents.openDevTools();
   }
