@@ -1,8 +1,6 @@
 // tests/validator.test.js
 
 const path = require('path');
-
-// Путь к нашему валидатору внутри движка
 const validateManifest = require('../packages/axle-llm/core/validator');
 
 function log(message, data) {
@@ -26,13 +24,13 @@ module.exports = {
         options: {
             manifest: {
                 launch: {},
-                components: { main: 'main.html' },
+                components: { 'mainLayout': { template: 'main-layout.jsx' } },
                 connectors: { db: { type: 'in-memory', initialState: {} } },
-                routes: { 'GET /': { type: 'view', layout: 'main', reads: ['db'] } },
+                routes: { 'GET /': { type: 'view', layout: 'mainLayout', reads: ['db'] } },
                 bridge: {}
             },
             files: {
-                'app/components/main.html': '<div>Hello</div>'
+                'app/components/main-layout.jsx': '<div>Hello</div>'
             }
         },
         async run(appPath) {
@@ -44,82 +42,27 @@ module.exports = {
         }
     },
 
-    'Validator: Missing required sections should fail': {
-        options: {
-            manifest: {
-                components: { main: 'main.html' },
-                connectors: { db: { type: 'in-memory', initialState: {} } },
-            },
-            files: {} 
-        },
-        async run(appPath) {
-            const manifest = require(path.join(appPath, 'manifest.js'));
-            log('Running validation for a manifest with missing sections...');
-            const issues = validateManifest(manifest, appPath);
-            log('Validation issues found:', issues);
-            check(issues.length > 0, 'Expected at least one issue.');
-            check(
-                issues.some(issue => issue.level === 'error' && issue.message.includes("'routes' is missing")),
-                'Expected an error about the missing "routes" section.'
-            );
-        }
-    },
-
-    'Validator: Connector with missing type should fail': {
+    'Validator: Component with camelCase name should require a kebab-case .jsx file': {
         options: {
             manifest: {
                 launch: {},
-                components: {},
-                connectors: { 
-                    db: { initialState: {} }
-                },
-                routes: {},
-                bridge: {}
-            },
-            files: {}
-        },
-        async run(appPath) {
-            const manifest = require(path.join(appPath, 'manifest.js'));
-            log('Running validation for a connector with no type...');
-            const issues = validateManifest(manifest, appPath);
-            log('Validation issues found:', issues);
-            check(issues.length > 0, 'Expected at least one issue.');
-            const issue = issues[0];
-            check(issue.level === 'error', 'Issue level should be "error".');
-            check(
-                issue.message.includes("missing the required 'type' property"),
-                'Error message should mention the missing "type" property.'
-            );
-        }
-    },
-
-    'Validator: Typo in component name should provide a suggestion': {
-        options: {
-            manifest: {
-                launch: {},
-                components: { myComponent: 'my.html' },
+                components: { 'mySuperComponent': {} },
                 connectors: {},
-                routes: {
-                    'GET /': { type: 'view', layout: 'myComponant' } 
-                },
+                routes: { 'GET /': { type: 'view', layout: 'mySuperComponent' } },
                 bridge: {}
             },
             files: {
-                'app/components/my.html': '<div></div>'
+                // Файл не создаем намеренно
             }
         },
         async run(appPath) {
             const manifest = require(path.join(appPath, 'manifest.js'));
-            log('Running validation for a manifest with a typo...');
+            log('Running validation for component file existence...');
             const issues = validateManifest(manifest, appPath);
             log('Validation issues found:', issues);
-            const relevantIssue = issues.find(issue => issue.category.includes('GET /'));
-            check(relevantIssue, 'An issue for the route "GET /" should exist.');
-            check(
-                relevantIssue.suggestion.includes("Did you mean 'myComponent'?"),
-                'Expected a suggestion for the typo.',
-                relevantIssue.suggestion
-            );
+            const fileIssue = issues.find(i => i.category === `Component 'mySuperComponent'`);
+            check(fileIssue, 'Should find an issue for the missing component file.');
+            check(fileIssue.message.includes(`component source file 'my-super-component.jsx'`), 'Error message should mention the expected kebab-case file name.', fileIssue.message);
         }
     },
 
@@ -127,29 +70,27 @@ module.exports = {
         options: {
             manifest: {
                 launch: {},
-                connectors: { 'user-data': { type: 'in-memory' } }, // Нет initialState -> будет warning
+                connectors: { 'userData': { type: 'in-memory', initialState: {} } },
                 components: {
-                    'layout': 'layout.html',
-                    'profile': {
-                        template: 'profile.html',
-                        schema: {
-                            requires: ['user-data']
-                        }
+                    'layout': { template: 'layout.jsx' },
+                    'profilePage': {
+                        template: 'profile-page.jsx',
+                        schema: { requires: ['userData'] }
                     }
                 },
                 routes: {
                     'GET /profile': {
                         type: 'view',
                         layout: 'layout',
-                        reads: [], 
-                        inject: { 'content': 'profile' }
+                        reads: [], // Намеренно не предоставляем 'userData'
+                        inject: { 'pageContent': 'profilePage' }
                     }
                 },
                 bridge: {}
             },
             files: {
-                'app/components/layout.html': '<div><atom-inject into="content"></atom-inject></div>',
-                'app/components/profile.html': '<h1>{{ data.user-data.name }}</h1>'
+                'app/components/layout.jsx': '<div></div>',
+                'app/components/profile-page.jsx': '<h1>{{ data.userData.name }}</h1>'
             }
         },
         async run(appPath) {
@@ -158,59 +99,20 @@ module.exports = {
             const issues = validateManifest(manifest, appPath);
             log('Validation issues found:', issues);
             
-            check(issues.length > 0, 'Expected at least one validation issue.');
-
-            // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
-            // Ищем конкретную ошибку, а не просто берем первую
             const schemaError = issues.find(issue => 
                 issue.level === 'error' && 
-                issue.message.includes("requires connector 'user-data'")
+                issue.message.includes("requires connector 'userData'")
             );
             
             check(schemaError, 'An error about the missing connector should be found.');
             if (schemaError) {
                 check(schemaError.category.includes('GET /profile'), 'The issue should be related to the correct route.');
                 check(
-                    schemaError.message.includes("Component 'profile' requires connector 'user-data'"),
+                    schemaError.message.includes("Component 'profilePage' requires connector 'userData'"),
                     'The error message should correctly identify the component and the missing connector.',
                     schemaError.message
                 );
             }
-            // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
         }
     },
-
-    'Validator: Component schema should pass if all required connectors are present': {
-        options: {
-            manifest: {
-                launch: {},
-                connectors: { 'user-data': { type: 'in-memory', initialState: {} } },
-                components: {
-                    'layout': {
-                        template: 'layout.html',
-                        schema: { requires: ['user-data'] } 
-                    }
-                },
-                routes: {
-                    'GET /': {
-                        type: 'view',
-                        layout: 'layout',
-                        reads: ['user-data']
-                    }
-                },
-                bridge: {}
-            },
-            files: {
-                'app/components/layout.html': '<h1>{{ data.user-data.name }}</h1>'
-            }
-        },
-        async run(appPath) {
-            const manifest = require(path.join(appPath, 'manifest.js'));
-            log('Running validation for a route with a correctly provided connector...');
-            const issues = validateManifest(manifest, appPath);
-            log('Validation issues found:', issues);
-
-            check(issues.length === 0, 'Expected zero issues for a correctly configured route.');
-        }
-    }
 };

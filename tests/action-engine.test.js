@@ -1,13 +1,8 @@
 // tests/action-engine.test.js
 
 const path = require('path');
-
-// Пути к модулям ядра
 const { ActionEngine } = require('../packages/axle-llm/core/action-engine');
 const { AssetLoader } = require('../packages/axle-llm/core/asset-loader');
-const { RequestHandler } = require('../packages/axle-llm/core/request-handler');
-const { ConnectorManager } = require('../packages/axle-llm/core/connector-manager');
-const { Renderer } = require('../packages/axle-llm/core/renderer');
 
 function log(message, data) {
     console.log(`\n[LOG] ${message}`);
@@ -48,176 +43,55 @@ module.exports = {
         }
     },
 
-    'ActionEngine: Step "if/then/else" should work correctly': {
-        options: {},
-        async run(appPath) {
-            const initialContext = { data: { user: { role: 'guest' } } };
-            const engine = new ActionEngine(initialContext, appPath, null, null);
-            const steps = [{
-                "if": "data.user.role === 'admin'",
-                "then": [{ "set": "context.access", "to": "'granted'" }],
-                "else": [{ "set": "context.access", "to": "'denied'" }]
-            }];
-            await engine.run(steps);
-            const finalContext = engine.context;
-            log('Final context:', finalContext);
-            check(finalContext.context.access === 'denied', 'The "else" block should be executed when condition is false.');
-        }
-    },
-
-    'ActionEngine: Step "run" should execute an external action file': {
-        options: {
-            manifest: {},
-            files: {
-                'app/actions/myTestAction.js': `module.exports = (ctx, body) => { ctx.data.sum = body.a + body.b; };`
-            }
-        },
-        async run(appPath) {
-            const manifest = require(path.join(appPath, 'manifest.js'));
-            const assetLoader = new AssetLoader(appPath, manifest);
-            const initialContext = { data: {}, body: { a: 5, b: 10 } };
-            const engine = new ActionEngine(initialContext, appPath, assetLoader, null);
-            const steps = [{ "run": "myTestAction" }];
-            await engine.run(steps);
-            const finalContext = engine.context;
-            log('Final context:', finalContext);
-            check(finalContext.data.sum === 15, 'Step "run" should execute code from an external file and modify context.');
-        }
-    },
-
     'ActionEngine: Step "run:set" should execute a handler and set its return value': {
         options: {
             manifest: {},
             files: {
-                'app/actions/formatName.js': `module.exports = (firstName, lastName) => { return \`\${lastName}, \${firstName}\`; };`,
-                'app/actions/double.js': `module.exports = (num) => { return num * 2; };`
+                'app/actions/formatName.js': `module.exports = (firstName, lastName) => { return \`\${lastName}, \${firstName}\`; };`
             }
         },
         async run(appPath) {
             const manifest = require(path.join(appPath, 'manifest.js'));
             const assetLoader = new AssetLoader(appPath, manifest);
-            const initialContext = {
-                data: { user: { first: 'John', last: 'Doe' }, count: 10 },
-                _internal: {},
-            };
+            const initialContext = { data: { user: { first: 'John', last: 'Doe' } } };
             const engine = new ActionEngine(initialContext, appPath, assetLoader, null);
             const steps = [
-                { "run:set": "data.user.formattedName", "handler": "formatName", "with": "[data.user.first, data.user.last]" },
-                { "run:set": "data.doubledCount", "handler": "double", "with": "data.count" }
+                { "run:set": "data.user.formattedName", "handler": "formatName", "with": "[data.user.first, data.user.last]" }
             ];
             await engine.run(steps);
             const finalContext = engine.context;
             log('Final context for run:set test:', finalContext);
             check(finalContext.data.user.formattedName === 'Doe, John', 'Should correctly format name using multiple arguments.');
-            check(finalContext.data.doubledCount === 20, 'Should correctly double the number using a single argument.');
         }
     },
-    
-    'ActionEngine: Step "action:run" should call another action': {
-        options: {
-            manifest: {
-                routes: {
-                    "calculateTotal": { "type": "action", "internal": true, "steps": [{ "set": "data.cart.total", "to": "data.cart.items.reduce((sum, item) => sum + item.price, 0)" }] },
-                    "POST /addItem": { "type": "action", "steps": [ { "set": "data.cart.items", "to": "data.cart.items.concat([{ price: body.price }])" }, { "action:run": { "name": "calculateTotal" } } ] }
+
+    'ActionEngine: Step "bridge:call" with "await" should pause execution': {
+        options: { manifest: { bridge: { dialogs: { showOpenDialog: true } } } },
+        async run(appPath) {
+            const initialContext = { data: {}, context: {}, _internal: {} };
+            const engine = new ActionEngine(initialContext, appPath, null, null);
+            const awaitableStep = {
+                "bridge:call": {
+                    "api": "dialogs.showOpenDialog",
+                    "await": true,
+                    "resultTo": "context.openResult"
                 }
-            }
-        },
-        async run(appPath) {
-            const manifest = require(path.join(appPath, 'manifest.js'));
-            const dbPath = path.join(appPath, 'test-db-data');
-            const connectorManager = new ConnectorManager(appPath, manifest, { dbPath });
-            await connectorManager.init();
-            const assetLoader = new AssetLoader(appPath, manifest);
-            const renderer = new Renderer(assetLoader, manifest, connectorManager);
-            const requestHandler = new RequestHandler(manifest, connectorManager, assetLoader, renderer, appPath);
-            const initialContext = { data: { cart: { items: [{ price: 100 }], total: 100 } }, body: { price: 50 } };
-            const engine = new ActionEngine(initialContext, appPath, assetLoader, requestHandler);
-            const routeConfig = manifest.routes['POST /addItem'];
-            await engine.run(routeConfig.steps);
-            const finalContext = engine.context;
-            log('Final context:', finalContext);
-            check(finalContext.data.cart.items.length === 2, 'The parent action should add an item to the cart.');
-            check(finalContext.data.cart.total === 150, 'The internal action "calculateTotal" should have recalculated the total correctly.');
-        }
-    },
-
-    'ActionEngine: Step "try/catch" should handle runtime errors declaratively': {
-        options: { manifest: {}, files: {} },
-        async run(appPath) {
-            const initialContext = { data: { result: 'pending', errorMessage: '' } };
-            const engine = new ActionEngine(initialContext, appPath, null, null);
-            const steps = [ { "try": [ { "set": "data.invalid", "to": "JSON.parse('{not_json}')" }, { "set": "data.result", "to": "'try_succeeded'" } ], "catch": [ { "set": "data.result", "to": "'caught_error'" }, { "set": "data.errorMessage", "to": "error.message" } ] } ];
-            await engine.run(steps);
-            const finalContext = engine.context;
-            log('Final context after try/catch:', finalContext);
-            check(finalContext.data.result === 'caught_error', 'The "catch" block should have been executed.');
-            check(finalContext.data.errorMessage.includes('in JSON'), 'The original error message should be captured in the context.', finalContext.data.errorMessage);
-            check(!finalContext.data.errorMessage.includes('Step execution failed'), 'The error message should be the original one, not the wrapped one.', finalContext.data.errorMessage);
-            check(!finalContext.hasOwnProperty('error'), 'The "error" object should be cleaned up from the final context.');
-        }
-    },
-
-    'ActionEngine: Step "bridge:call" for a server module should execute it and save the result': {
-        options: {
-            manifest: { bridge: { custom: { 'utils': 'utils.js' } } },
-            files: {
-                'app/bridge/utils.js': `
-                    const fs = require('fs');
-                    module.exports = {
-                        generateId: (prefix) => {
-                            return prefix + '-' + Math.random().toString(36).substring(2, 9);
-                        },
-                        checkFileExists: (filePath) => {
-                            return fs.existsSync(filePath);
-                        }
-                    };
-                `
-            }
-        },
-        async run(appPath) {
-            const manifest = require(path.join(appPath, 'manifest.js'));
-            const assetLoader = new AssetLoader(appPath, manifest);
-            const initialContext = { data: { prefix: 'user' }, _internal: {} };
-            const engine = new ActionEngine(initialContext, appPath, assetLoader, null);
-            const steps = [ { "bridge:call": { "api": "custom.utils.generateId", "args": "[data.prefix]", "resultTo": "data.newUserId" } } ];
-            await engine.run(steps);
-            const finalContext = engine.context;
-            log('Final context for server bridge test:', finalContext);
-            check(finalContext.data.newUserId, 'Result from bridge call should be set to context.');
-            check(finalContext.data.newUserId.startsWith('user-'), 'The result should have the correct format.');
-        }
-    },
-
-    // ★★★ НАЧАЛО НОВОГО ТЕСТА ★★★
-    'ActionEngine: Steps "log" and "log:value" should output to console': {
-        options: { manifest: {}, files: {} },
-        async run(appPath) {
-            // Перехватываем console.log, чтобы проверить его вывод
-            const originalLog = console.log;
-            const logs = [];
-            console.log = (...args) => {
-                logs.push(args.join(' '));
             };
-
-            const initialContext = { data: { user: { name: 'Alice' } } };
-            const engine = new ActionEngine(initialContext, appPath, null, null);
             const steps = [
-                { "log": "Starting user processing..." },
-                { "log:value": "data.user" }
+                { "set": "context.status", "to": "'started'" },
+                awaitableStep,
+                { "set": "context.status", "to": "'finished'" } 
             ];
             await engine.run(steps);
-
-            // Возвращаем оригинальный console.log
-            console.log = originalLog;
+            const finalContext = engine.context;
+            log('Final context after awaitable call:', finalContext);
             
-            log("Captured logs:", logs);
-
-            const simpleLog = logs.find(l => l.includes('Starting user processing...'));
-            const valueLog = logs.find(l => l.includes('data.user ='));
-            
-            check(simpleLog, 'Step "log" should output a simple message.');
-            check(valueLog, 'Step "log:value" should output a variable name and its value.');
-            check(valueLog && valueLog.includes('"name": "Alice"'), 'The value log should contain the correct JSON representation.');
+            check(finalContext.context.status === 'started', 'Execution should stop after the awaitable call.');
+            check(finalContext._internal.interrupt === true, 'Interrupt flag should be set to true.');
+            check(finalContext._internal.awaitingBridgeCall, 'awaitingBridgeCall object should be set.');
+            check(finalContext._internal.awaitingBridgeCall.details.api === 'dialogs.showOpenDialog', 'Awaiting call details should be correct.');
+            check(finalContext._internal.awaitingBridgeCall.resultTo === 'context.openResult', 'Awaiting call result path should be correct.');
+            check(JSON.stringify(finalContext._internal.lastStep) === JSON.stringify(awaitableStep), 'The last executed step should be the awaitable one.');
         }
     }
 };

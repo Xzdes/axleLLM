@@ -5,17 +5,31 @@ const { z, ZodError } = require('zod');
 
 function evaluate(expression, context, appPath) {
   if (typeof expression !== 'string') return expression;
+  
+  // Создаем функцию, которая будет выполняться в "песочнице" контекста
   const func = new Function('ctx', 'require', `with (ctx) { return (${expression}); }`);
+  
+  // Создаем "умный" require, который ищет модули относительно папки приложения
   const smartRequire = (moduleName) => require(require.resolve(moduleName, { paths: [appPath] }));
+  
+  // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+  // Добавляем Zod в контекст, выполняем код и ГАРАНТИРОВАННО удаляем его после
   context.zod = z;
-  const result = func(context, smartRequire);
-  if (typeof result === 'string') {
-    const trimmedResult = result.trim();
-    if ((trimmedResult.startsWith('{') && trimmedResult.endsWith('}')) || (trimmedResult.startsWith('[') && trimmedResult.endsWith(']'))) {
-      try { return JSON.parse(trimmedResult); } catch (e) { /* ignore */ }
+  try {
+    const result = func(context, smartRequire);
+    // Попытка автоматически распарсить JSON-подобные строки
+    if (typeof result === 'string') {
+      const trimmedResult = result.trim();
+      if ((trimmedResult.startsWith('{') && trimmedResult.endsWith('}')) || (trimmedResult.startsWith('[') && trimmedResult.endsWith(']'))) {
+        try { return JSON.parse(trimmedResult); } catch (e) { /* ignore */ }
+      }
     }
+    return result;
+  } finally {
+    // Этот блок выполнится всегда, даже если внутри `try` произошла ошибка.
+    delete context.zod;
   }
-  return result;
+  // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
 }
 
 class ActionEngine {
@@ -28,25 +42,22 @@ class ActionEngine {
     this.context._internal = this.context._internal || {}; 
   }
 
-  // ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ: ПЕРЕПИСЫВАЕМ ЛОГИКУ ПРОДОЛЖЕНИЯ ★★★
   async run(steps) {
     if (!Array.isArray(steps)) return;
 
     let stepsToRun = steps;
-    // Если мы продолжаем выполнение, то нужно взять только оставшиеся шаги
     if (this.context._internal.resumingFrom) {
       const resumeStepString = JSON.stringify(this.context._internal.resumingFrom);
       const resumeIndex = steps.findIndex(step => JSON.stringify(step) === resumeStepString);
       if (resumeIndex !== -1) {
         stepsToRun = steps.slice(resumeIndex + 1);
       }
-      delete this.context._internal.resumingFrom; // Очищаем флаг
+      delete this.context._internal.resumingFrom; 
     }
 
     for (const step of stepsToRun) {
       if (this.context._internal.interrupt) break;
       await this.executeStep(step);
-      // Запоминаем последний выполненный шаг
       this.context._internal.lastStep = step;
     }
   }

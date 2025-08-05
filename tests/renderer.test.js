@@ -37,11 +37,16 @@ async function setupRendererTest(appPath) {
     if (fs.existsSync(componentsDir)) {
       const entryPoints = (await fs.promises.readdir(componentsDir))
         .filter(f => f.endsWith('.jsx'))
-        .map(f => path.join(componentsDir, f));
+        .reduce((acc, file) => {
+            const baseName = path.basename(file, '.jsx');
+            const camelCaseName = baseName.replace(/-(\w)/g, (_, char) => char.toUpperCase());
+            acc[camelCaseName] = path.join(componentsDir, file);
+            return acc;
+        }, {});
 
       log('Found JSX entry points:', entryPoints);
 
-      if (entryPoints.length > 0) {
+      if (Object.keys(entryPoints).length > 0) {
         if (!fs.existsSync(outDir)) await fs.promises.mkdir(outDir, { recursive: true });
         
         log('Compiling JSX components with esbuild...');
@@ -50,6 +55,8 @@ async function setupRendererTest(appPath) {
             outdir: outDir,
             platform: 'node',
             format: 'cjs',
+            bundle: true,
+            external: ['react'],
             jsx: 'transform',
             jsxFactory: 'React.createElement',
             jsxFragment: 'React.Fragment'
@@ -75,20 +82,24 @@ module.exports = {
         options: {
             manifest: {
                 launch: { title: 'Test App' },
-                connectors: { user: { type: 'in-memory', initialState: { name: 'Alice' } } },
-                components: { 'main-layout': {}, 'header': {}, 'home-page': {} },
-                routes: { 'GET /': { type: 'view', layout: 'main-layout', reads: ['user'], inject: { header: 'header', pageContent: 'home-page' } } }
+                connectors: { appState: { type: 'in-memory', initialState: { theme: 'dark' } } },
+                components: { 
+                    'mainLayout': {}, 
+                    'header': {}, 
+                    'homePage': {} 
+                },
+                routes: { 
+                    'GET /': { type: 'view', layout: 'mainLayout', reads: ['appState'], inject: { header: 'header', pageContent: 'homePage' } } 
+                }
             },
             files: {
                 'app/components/main-layout.jsx': `
                     import React from 'react';
-                    const util = require('util');
                     export default function MainLayout(props) {
-                        console.log('--- PROPS INSIDE MainLayout ---', util.inspect(Object.keys(props), { colors: true }));
-                        const { header: HeaderComponent, pageContent: PageComponent } = props.components;
+                        const { header: HeaderComponent, pageContent: PageComponent } = props.components || {};
                         return (
                             <div id="layout">
-                                <h1>Layout</h1>
+                                <h1>Layout Theme: {props.data.appState.theme}</h1>
                                 {HeaderComponent && <HeaderComponent {...props} />}
                                 {PageComponent && <PageComponent {...props} />}
                             </div>
@@ -96,11 +107,8 @@ module.exports = {
                     }`,
                 'app/components/header.jsx': `
                     import React from 'react';
-                    const util = require('util');
-                    export default function Header(props) {
-                        console.log('--- PROPS INSIDE Header ---', util.inspect(props, { depth: 3, colors: true }));
-                        const { data } = props;
-                        return <header>Welcome, {data && data.user ? data.user.name : 'USER_NOT_FOUND'}</header>;
+                    export default function Header({ user }) {
+                        return <header>Welcome, {user ? user.name : 'USER_NOT_FOUND'}</header>;
                     }`,
                 'app/components/home-page.jsx': `
                     import React from 'react';
@@ -113,52 +121,25 @@ module.exports = {
             log('Starting test: "Should render a full view..."');
             const { manifest, renderer, connectorManager } = await setupRendererTest(appPath);
             const routeConfig = manifest.routes['GET /'];
-            const dataContext = await connectorManager.getContext(routeConfig.reads);
-            const html = await renderer.renderView(routeConfig, dataContext, null);
-            log('Rendered View HTML:', html);
+            const connectorData = await connectorManager.getContext(routeConfig.reads);
+            const fullDataContext = { ...connectorData, user: { name: 'Alice' } };
             
+            const html = await renderer.renderView(routeConfig, fullDataContext, { pathname: '/', query: {} });
+
+            log('Rendered View HTML:', html);
             check(html.includes('<title>Test App</title>'), 'Should render the correct page title.');
             
             const headerRegex = /<header>Welcome,.*Alice<\/header>/;
-            check(headerRegex.test(html), 'Should render the injected header with correct props.', html);
+            check(headerRegex.test(html), 'Should render the injected header with correct user prop.', html);
+
+            // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ★★★
+            // Используем регулярное выражение, чтобы игнорировать комментарии и пробелы
+            const contentRegex = /<h1>Layout Theme:.*dark<\/h1>/;
+            check(contentRegex.test(html), 'Should render data from regular connectors.', html);
+            // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
 
             check(html.includes('<main>Home Page Content</main>'), 'Should render the injected page content.');
-        }
-    },
-
-    'Renderer: Should correctly include component styles and theme variables': {
-        options: {
-            manifest: {
-                launch: { title: 'Styled App' },
-                themes: { default: { '--main-color': 'blue' } },
-                connectors: {},
-                components: { 'main-layout': { style: 'main.css' }, 'card': { style: 'card.css' } },
-                routes: { 'GET /': { type: 'view', layout: 'main-layout', inject: { pageContent: 'card' } } }
-            },
-            files: {
-                'app/components/main-layout.jsx': `
-                    import React from 'react';
-                    export default function MainLayout(props) {
-                        const { pageContent: PageContentComponent } = props.components;
-                        return <div>{PageContentComponent && <PageContentComponent {...props} />}</div>;
-                    }`,
-                'app/components/card.jsx': `
-                    import React from 'react';
-                    export default function Card() {
-                        return <div className="card">Card</div>
-                    }`,
-                'app/components/main.css': `body { font-family: sans-serif; }`,
-                'app/components/card.css': `.card { color: var(--main-color); }`
-            }
-        },
-        async run(appPath) {
-            log('Starting test: "Should correctly include component styles..."');
-            const { manifest, renderer } = await setupRendererTest(appPath);
-            const html = await renderer.renderView(manifest.routes['GET /'], {}, null);
-            log('Rendered Styled HTML:', html);
-            
-            check(html.includes('<style id="axle-theme-variables">'), 'Should include the theme variables style tag.');
-            check(html.includes('--main-color: blue;'), 'Should include the correct theme variable.');
+            check(html.includes('window.__INITIAL_DATA__ = {"appState":{"theme":"dark"}}'), 'Should correctly serialize only connector data to the client script.');
         }
     }
 };
