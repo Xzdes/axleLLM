@@ -51,6 +51,9 @@ npm-shrinkwrap.json
 
 /packages/example-app/public/bundle.js
 
+packages/axle-llm/main.build.js
+packages/example-app/main.build.js
+
 # Временные файлы тестов (если появятся)
 /tests/_temp/
 /tests/_runner.js

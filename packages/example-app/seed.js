@@ -1,15 +1,11 @@
 // packages/example-app/seed.js
-// Это отдельный Node.js скрипт для первоначального наполнения базы данных.
-// Он не является частью самого движка, а запускается вручную командой `npm run seed`.
-
 const path = require('path');
 const WiseJSON = require('wise-json-db/wise-json');
-const bcrypt = require('bcrypt');
+// ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ: ИСПОЛЬЗУЕМ НОВУЮ БИБЛИОТЕКУ ★★★
+const bcrypt = require('bcryptjs');
 
-// Путь к нашей базе данных.
 const DB_PATH = path.resolve(__dirname, 'axle-db-data');
 
-// Начальные данные.
 const initialPositions = [
     { "id": 1, "name": "Хлеб Бородинский", "price": 45.50 },
     { "id": 2, "name": "Молоко 3.2%", "price": 80.00 },
@@ -20,14 +16,11 @@ const initialPositions = [
 
 const defaultUser = {
   login: 'kassir',
-  password: '123', // Мы захэшируем его перед сохранением.
+  password: '123',
   name: "Иванов И.И.",
   role: "Кассир"
 };
 
-/**
- * Главная асинхронная функция для наполнения БД.
- */
 async function seedDatabase() {
     console.log(`🌱 Запускаем наполнение базы данных в: ${DB_PATH}`);
     const db = new WiseJSON(DB_PATH);
@@ -36,21 +29,20 @@ async function seedDatabase() {
         await db.init();
         console.log("✅ База данных успешно инициализирована.");
 
-        // 1. Наполняем коллекцию товаров.
         const positionsCol = await db.getCollection('positions');
         await positionsCol.clear();
         await positionsCol.insertMany(initialPositions);
         console.log(`✅ Коллекция "positions" наполнена ${initialPositions.length} товарами.`);
 
-        // 2. Создаем пользователя по умолчанию.
         const userCol = await db.getCollection('user');
         await userCol.clear();
         
         const saltRounds = 10;
-        const passwordHash = await bcrypt.hash(defaultUser.password, saltRounds);
+        // ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ: Используем СИНХРОННЫЙ метод, он проще и надежнее ★★★
+        const passwordHash = bcrypt.hashSync(defaultUser.password, saltRounds);
         
         const userData = {
-            _id: 'user_kassir_default', // Добавляем предсказуемый ID
+            _id: 'user_kassir_default',
             login: defaultUser.login,
             passwordHash: passwordHash,
             name: defaultUser.name,
@@ -59,7 +51,6 @@ async function seedDatabase() {
         await userCol.insert(userData);
         console.log(`✅ Пользователь "${defaultUser.login}" создан с паролем "${defaultUser.password}".`);
 
-        // 3. Очищаем "динамические" коллекции.
         await db.getCollection('sessions').then(col => col.clear());
         console.log(`✅ Коллекция "sessions" очищена.`);
         
@@ -74,5 +65,4 @@ async function seedDatabase() {
     }
 }
 
-// Запускаем наш скрипт.
 seedDatabase();

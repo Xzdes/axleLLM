@@ -2,7 +2,10 @@
   "name": "axle-llm-monorepo",
   "version": "1.0.0",
   "private": true,
+  "main": "packages/axle-llm/main.js",
   "description": "The monorepository for the axleLLM engine and its example application.",
+  "author": "Xzdes",
+  "license": "MIT",
   "scripts": {
     "bootstrap": "npm install",
     "dev": "npm run dev --workspace=example-app",
@@ -10,15 +13,12 @@
     "package": "npm run package --workspace=example-app",
     "test": "node ./tests/run-all-tests.js"
   },
-  "dependencies": {
-    "ws": "8.18.3"
-  },
   "workspaces": [
     "packages/*"
   ],
-  "author": "Xzdes",
-  "license": "MIT",
+  "dependencies": {},
   "devDependencies": {
-    "react": "^19.1.1"
+    "electron": "37.2.5",
+    "electron-builder": "26.0.12"
   }
 }
