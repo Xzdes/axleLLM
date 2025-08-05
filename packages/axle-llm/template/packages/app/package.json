@@ -20,6 +20,23 @@
   },
   "build": {
     "appId": "com.axlellm.<APP_NAME>",
-    "productName": "<APP_NAME>"
+    "productName": "<APP_NAME>",
+    "files": [
+      "**/*",
+      "../axle-llm/**/*"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "../../dist"
+    },
+    "win": {
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "icon": "build/icon.png"
+    }
   }
 }
