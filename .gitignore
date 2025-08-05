@@ -65,7 +65,7 @@ packages/example-app/main.build.js
 # Мы коммитим только исходный код, а не результат сборки.
 dist/
 release/
-build/
+
 *.exe
 *.dmg
 *.AppImage
