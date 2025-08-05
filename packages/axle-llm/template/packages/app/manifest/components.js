@@ -1,13 +1,26 @@
+// packages/app/manifest/components.js
+
 module.exports = {
-  // Главный макет приложения.
+  /**
+   * Главный "каркас" приложения.
+   * Все остальные страницы будут рендериться внутри него.
+   */
   "mainLayout": {
-    "template": "layouts/main-layout.html"
+    "template": "main-layout.jsx"
   },
-  // Наша единственная страница.
+
+  /**
+   * Наша единственная страница, которая будет отображаться
+   * при запуске приложения.
+   */
   "homePage": {
-    "template": "pages/home-page.html",
+    "template": "home-page.jsx",
+    "style": "home-page.css",
     "schema": {
-      "requires": ["viewState"] // Явно указываем, что этой странице нужен viewState.
+      // Это "контракт данных". Компонент заявляет, что для
+      // его отрисовки ему НЕОБХОДИМЫ данные из коннектора `viewState`.
+      // Валидатор будет следить за выполнением этого контракта.
+      "requires": ["viewState"]
     }
   }
 };

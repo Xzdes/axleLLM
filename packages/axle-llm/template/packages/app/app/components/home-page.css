@@ -1,0 +1,50 @@
+/* packages/app/app/components/home-page.css */
+
+.home-page-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px;
+  background-color: var(--secondary-bg);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.home-page-container h1 {
+  font-size: 2.5rem;
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.home-page-container p {
+  font-size: 1.1rem;
+  color: #666;
+  max-width: 500px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.home-page-container button {
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #fff;
+  background-color: #007bff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out, transform 0.1s ease;
+}
+
+.home-page-container button:hover {
+  background-color: #0056b3;
+}
+
+.home-page-container button:active {
+  transform: scale(0.98);
+}
