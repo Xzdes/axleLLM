@@ -15,7 +15,8 @@
     "axle-llm": "file:../axle-llm",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "wise-json-db": "^6.0.2"
+    "wise-json-db": "^6.0.2",
+    "uuid": "11.1.0"
   },
   "build": {
     "appId": "com.axlellm.<APP_NAME>",
