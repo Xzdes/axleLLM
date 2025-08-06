@@ -4,7 +4,11 @@ module.exports = {
     "style": "main-layout.css"
   },
   "titleBar": {
-    "template": "title-bar.jsx"
+    "template": "title-bar.jsx",
+    "style": "title-bar.css",
+    "schema": {
+      "requires": ["globals"]
+    }
   },
   "homePage": {
     "template": "home-page.jsx",

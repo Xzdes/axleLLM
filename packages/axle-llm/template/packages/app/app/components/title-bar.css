@@ -1,0 +1,35 @@
+/* packages/app/app/components/title-bar.css */
+
+/*
+  Стили для кнопок управления окном.
+  Движок axleLLM автоматически изолирует эти классы, чтобы они
+  не конфликтовали с другими стилями в приложении.
+*/
+
+.window-control-button {
+  width: 40px; /* Немного увеличим ширину для удобства */
+  height: 32px;
+  border: none;
+  background-color: transparent;
+  color: #495057;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* Плавный переход для эффекта наведения */
+  transition: background-color 0.15s ease-in-out;
+}
+
+/* Эффект наведения для всех кнопок (кроме закрытия) */
+.window-control-button:hover {
+  background-color: #e9ecef;
+}
+
+/* Отдельный, более заметный эффект для кнопки закрытия */
+.window-control-button.close:hover {
+  background-color: #e63946;
+  color: white;
+}
