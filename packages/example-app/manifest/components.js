@@ -2,7 +2,10 @@
 module.exports = {
   "mainLayout": {
     "template": "main-layout.jsx",
-    "style": "main-layout.css" // ★ ИЗМЕНЕНИЕ: Регистрируем файл стилей
+    "style": "main-layout.css",
+    "schema": {
+      "requires": ["settings"]
+    }
   },
   
   "authLayout": {

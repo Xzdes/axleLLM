@@ -3,31 +3,46 @@
 const connectors = require('./manifest/connectors.js');
 const components = require('./manifest/components.js');
 const bridge = require('./manifest/bridge.js');
+const settingsRoutes = require('./manifest/routes/settings.routes.js');
+const authRoutes = require('./manifest/routes/auth.routes.js');
+const cashierRoutes = require('./manifest/routes/cashier.routes.js');
+const launch = require('./manifest/launch.js');
 
 module.exports = {
   launch: {
-    title: "Атомарная Касса (axleLLM)",
-    window: { width: 1366, height: 768, devtools: true }
+    title: launch.title,
+    window: launch.window,
+    serve: launch.serve,
+    build: launch.build,
+    hydrate: {
+      // Это указывает движку, как обновлять DOM при изменениях
+      strategy: 'replace',
+      rootSelector: '#root'
+    }
   },
   themes: {
-    // ★★★ НАЧАЛО ИЗМЕНЕНИЙ ★★★
     "light": {
-      "--primary-bg": "#f0f2f5",
-      "--secondary-bg": "#FFFFFF",
+      "--primary-bg": "#ffffff",
+      "--secondary-bg": "#f8f9fa",
       "--text-color": "#1a1a1a",
-      "--header-height": "60px",
+      "--text-secondary": "#6c757d",
       "--border-color": "#dee2e6",
-      "--border-radius": "8px"
+      "--header-height": "60px",
+      "--border-radius": "8px",
+      "--accent-color": "#007bff",
+      "--accent-hover": "#0056b3"
     },
     "dark": {
-      "--primary-bg": "#18191a",
-      "--secondary-bg": "#242526",
-      "--text-color": "#e4e6eb",
+      "--primary-bg": "#1a1a1a",
+      "--secondary-bg": "#2d2d2d",
+      "--text-color": "#ffffff",
+      "--text-secondary": "#b0b0b0",
+      "--border-color": "#404040",
       "--header-height": "60px",
-      "--border-color": "#3a3b3c",
-      "--border-radius": "8px"
+      "--border-radius": "8px",
+      "--accent-color": "#3a8fff",
+      "--accent-hover": "#1a6cd0"
     }
-    // ★★★ КОНЕЦ ИЗМЕНЕНИЙ ★★★
   },
   globals: {
     appName: "Атомарная Касса",
@@ -44,9 +59,13 @@ module.exports = {
       "emit": { "event": "receipt-changed", "payload": "receipt" }
     }
   },
-  // Эти строки остаются без изменений
+  // Регистрируем все компоненты и роуты
   connectors: connectors,
   components: components,
   bridge: bridge,
-  routes: {},
+  routes: {
+    ...authRoutes,
+    ...cashierRoutes,
+    ...settingsRoutes
+  },
 };

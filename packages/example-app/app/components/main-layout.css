@@ -1,13 +1,63 @@
 /* packages/example-app/app/components/main-layout.css */
 
+/* Global CSS Variables */
+:root[data-theme="light"] {
+  /* Light theme */
+  --primary-bg: #ffffff;
+  --secondary-bg: #f8f9fa;
+  --text-color: #1a1a1a;
+  --text-secondary: #6c757d;
+  --border-color: #dee2e6;
+  --header-height: 60px;
+  --border-radius: 8px;
+  --accent-color: #007bff;
+  --accent-hover: #0056b3;
+}
+
+/* Dark theme */
+:root[data-theme="dark"] {
+  --primary-bg: #1a1a1a;
+  --secondary-bg: #2d2d2d;
+  --text-color: #ffffff;
+  --text-secondary: #b0b0b0;
+  --border-color: #404040;
+  --accent-color: #3a8fff;
+  --accent-hover: #1a6cd0;
+}
+
+/* Layout Styles */
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--primary-bg);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#header-container {
+  background-color: var(--secondary-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+#pageContent-container {
+  flex-grow: 1;
+  position: relative;
+  overflow-y: auto;
+  background-color: var(--primary-bg);
+}
+
 .theme-toggle-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
   padding: 10px 18px;
   font-size: 14px;
   font-weight: bold;
   border-radius: 20px;
-  border: 1px solid var(--border-color, #dee2e6);
-  background-color: var(--secondary-bg, #FFFFFF);
-  color: var(--text-color, #1a1a1a);
+  border: 1px solid var(--border-color);
+  background-color: var(--secondary-bg);
+  color: var(--text-color);
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   transition: all 0.2s ease-in-out;
@@ -16,4 +66,6 @@
 .theme-toggle-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  background-color: var(--accent-color);
+  color: white;
 }

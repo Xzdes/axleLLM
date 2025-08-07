@@ -4,13 +4,13 @@ module.exports = {
   "GET /login": {
     "type": "view",
     "layout": "mainLayout",
-    "reads": ["user"],
+    "reads": ["user", "settings"],
     "inject": { "header": "header", "pageContent": "authLayout", "formContent": "loginForm" }
   },
   "GET /register": {
     "type": "view",
     "layout": "mainLayout",
-    "reads": ["user"],
+    "reads": ["user", "settings"],
     "inject": { "header": "header", "pageContent": "authLayout", "formContent": "registerForm" }
   },
 

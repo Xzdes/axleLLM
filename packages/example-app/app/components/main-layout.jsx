@@ -3,20 +3,21 @@ import React from 'react';
 import Header from './header.jsx';
 
 export default function MainLayout(props) {
-  // Извлекаем компонент контента страницы, который передается через props.
   const { pageContent: PageComponent } = props.components || {};
   const currentTheme = props.data?.settings?.currentTheme || 'light';
 
-  // Мы убрали лишний div с id="app-shell". Компонент сам является "оболочкой".
-  // Стили для высоты и flex-направления теперь можно применить прямо к :host в CSS,
-  // но для простоты оставим их инлайновыми здесь.
+  // Применяем тему к документу
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+  }
+
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="app-container">
       <div id="header-container">
         <Header {...props} />
       </div>
       
-      <main id="pageContent-container" style={{ flexGrow: 1, position: 'relative' }}>
+      <main id="pageContent-container">
         {PageComponent && <PageComponent {...props} />}
       </main>
 

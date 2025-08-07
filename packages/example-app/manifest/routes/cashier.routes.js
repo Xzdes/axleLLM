@@ -92,8 +92,83 @@ module.exports = {
     "steps": [] 
   },
   
-  "GET /action/showInfo": { "type": "action", "reads": ["receipt"], "steps": [{ "bridge:call": { "api": "dialogs.showMessageBox", "args": "`{ \"type\": \"info\", \"title\": \"Информация о чеке\", \"message\": \"Текущая итоговая сумма чека:\", \"detail\": \"${data.receipt.finalTotal} руб.\" }`" }}]},
-  "GET /action/open-file": { "type": "action", "steps": [{ "bridge:call": { "api": "dialogs.showOpenDialog", "await": true, "resultTo": "context.openResult", "args": "`{ \"properties\": [\"openFile\"] }`"}}, { "if": "!context.openResult.canceled", "then": [{ "log:value": "context.openResult.filePaths[0]" }]}]},
-  "GET /action/open-docs": { "type": "action", "steps": [{ "bridge:call": { "api": "shell.openExternal", "args": "`{ \"url\": \"https://github.com/Xzdes/axleLLM\" }`" }}]},
-  "POST /action/saveReceipt": { "type": "action", "reads": ["receipt"], "steps": [{"run:set": "context.receiptText","handler": "formatReceiptForSave","with": "[data.receipt]"},{"bridge:call": {"api": "dialogs.showSaveDialog","await": true,"resultTo": "context.saveInfo","args": "`{ \"defaultPath\": \"receipt.txt\" }`"}},{"if": "!context.saveInfo.canceled","then": [{"bridge:call": {"api": "custom.fileUtils.saveTextFile","args": "[context.saveInfo.filePath, context.receiptText]","resultTo": "context.saveResult"}},{"bridge:call": {"api": "dialogs.showMessageBox","args": "`{ \"type\": \"${context.saveResult.success ? 'info' : 'error'}\", \"title\": \"Сохранение чека\", \"message\": \"${context.saveResult.message}\" }`"}}]}]}
+  "GET /action/showInfo": { 
+    "type": "action", 
+    "reads": ["receipt"], 
+    "steps": [
+      { 
+        "bridge:call": { 
+          "api": "dialogs.showMessageBox",
+          "args": "{ type: 'info', title: 'Информация о чеке', message: 'Текущая итоговая сумма чека:', detail: data.receipt.finalTotal + ' руб.' }"
+        }
+      }
+    ]
+  },
+  "GET /action/open-file": { 
+    "type": "action", 
+    "steps": [
+      { 
+        "bridge:call": { 
+          "api": "dialogs.showOpenDialog", 
+          "await": true, 
+          "resultTo": "context.openResult", 
+          "args": "{ properties: ['openFile'] }"
+        }
+      }, 
+      { 
+        "if": "!context.openResult.canceled", 
+        "then": [
+          { "log:value": "context.openResult.filePaths[0]" }
+        ]
+      }
+    ]
+  },
+  "GET /action/open-docs": { 
+    "type": "action", 
+    "steps": [
+      { 
+        "bridge:call": { 
+          "api": "shell.openExternal", 
+          "args": "'https://github.com/Xzdes/axleLLM'"
+        }
+      }
+    ]
+  },
+  "POST /action/saveReceipt": { 
+    "type": "action", 
+    "reads": ["receipt"], 
+    "steps": [
+      {
+        "run:set": "context.receiptText",
+        "handler": "formatReceiptForSave",
+        "with": "[data.receipt]"
+      },
+      {
+        "bridge:call": {
+          "api": "dialogs.showSaveDialog",
+          "await": true,
+          "resultTo": "context.saveInfo",
+          "args": "{ defaultPath: 'receipt.txt' }"
+        }
+      },
+      {
+        "if": "!context.saveInfo.canceled",
+        "then": [
+          {
+            "bridge:call": {
+              "api": "custom.fileUtils.saveTextFile",
+              "args": "[context.saveInfo.filePath, context.receiptText]",
+              "resultTo": "context.saveResult"
+            }
+          },
+          {
+            "bridge:call": {
+              "api": "dialogs.showMessageBox",
+              "args": "{ type: context.saveResult.success ? 'info' : 'error', title: 'Сохранение чека', message: context.saveResult.message }"
+            }
+          }
+        ]
+      }
+    ]
+  }
 };
