@@ -25,8 +25,6 @@ class Renderer {
   }
 
   _getAllStyles() {
-    // ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: ЗАГРУЖАЕМ ВСЕ СТИЛИ ★★★
-    // Мы просто берем все стили всех компонентов, которые есть в AssetLoader.
     let allStyles = '';
     const allComponentNames = Object.keys(this.manifest.components || {});
     for (const name of allComponentNames) {
@@ -45,10 +43,11 @@ class Renderer {
     const LayoutComponent = this._loadCompiledComponent(layoutName);
     if (!LayoutComponent) return `<html><body>Error: Layout component could not be loaded.</body></html>`;
     
+    // Разделяем данные: user отдельно, connectorData отдельно.
     const { user, ...connectorData } = dataContext;
     
     const props = {
-      data: connectorData,
+      data: connectorData, // В props.data идут только данные коннекторов
       user: user,
       globals: this.manifest.globals || {},
       url: this._getUrlContext(reqUrl),
@@ -70,21 +69,23 @@ class Renderer {
     const finalProps = { ...props, components: injectedComponentTypes };
     const appHtml = ReactDOMServer.renderToString(React.createElement(LayoutComponent, finalProps));
     
-    // ★★★ ИСПОЛЬЗУЕМ НОВУЮ ФУНКЦИЮ ★★★
     const renderedStyles = this._getAllStyles();
+    // ★★★ ИЗМЕНЕНИЕ: Передаем весь контекст в _getThemeStyles ★★★
+    const themeStyles = this._getThemeStyles(dataContext);
 
     const finalHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>${this.manifest.launch.title || 'AxleLLM App'}</title>
-    ${this._getThemeStyles()}
+    ${themeStyles}
     ${renderedStyles}
 </head>
 <body>
     <div id="root">${appHtml}</div>
     <script>
       window.axle = { components: {} };
+      // ★★★ ИЗМЕНЕНИЕ: Сериализуем только connectorData ★★★
       window.__INITIAL_DATA__ = ${JSON.stringify(connectorData)};
     </script>
     <script src="/public/bundle.js"></script>
@@ -94,14 +95,28 @@ class Renderer {
     return finalHtml;
   }
   
-  _getThemeStyles() {
+  // ★★★ НАЧАЛО КЛЮЧЕВЫХ ИЗМЕНЕНИЙ ★★★
+  _getThemeStyles(dataContext) {
     const themesConfig = this.manifest.themes;
-    if (themesConfig && themesConfig.default) {
-      const cssVariables = Object.entries(themesConfig.default).map(([key, value]) => `  ${key}: ${value};`).join('\n');
-      return `<style id="axle-theme-variables">\n:root {\n${cssVariables}\n}\n</style>`;
+    if (!themesConfig || Object.keys(themesConfig).length === 0) {
+      return '';
     }
-    return '';
+
+    // 1. Определяем, какую тему использовать.
+    // Пытаемся взять из данных 'settings.currentTheme'.
+    const currentThemeName = dataContext?.settings?.currentTheme || Object.keys(themesConfig)[0];
+    
+    // 2. Выбираем объект с переменными для этой темы.
+    // Если тема с таким именем не найдена, используем первую доступную как фолбэк.
+    const themeVariables = themesConfig[currentThemeName] || themesConfig[Object.keys(themesConfig)[0]];
+
+    const cssVariables = Object.entries(themeVariables)
+      .map(([key, value]) => `  ${key}: ${value};`)
+      .join('\n');
+      
+    return `<style id="axle-theme-variables">\n:root {\n${cssVariables}\n}\n</style>`;
   }
+  // ★★★ КОНЕЦ КЛЮЧЕВЫХ ИЗМЕНЕНИЙ ★★★
 
   _getUrlContext(reqUrl) {
     if (!reqUrl) return { pathname: '/', query: {} };

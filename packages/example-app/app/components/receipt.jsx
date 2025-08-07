@@ -1,9 +1,6 @@
 // packages/example-app/app/components/receipt.jsx
 import React from 'react';
 
-/**
- * Renders a single item within the receipt.
- */
 function ReceiptItem({ item }) {
   return (
     <li>
@@ -12,7 +9,7 @@ function ReceiptItem({ item }) {
         className="remove-btn"
         type="button"
         atom-action="POST /action/removeItem"
-        atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
+        atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ
         name="id"
         value={item.id}
       >
@@ -22,22 +19,17 @@ function ReceiptItem({ item }) {
   );
 }
 
-/**
- * Displays the current state of the receipt, including items, totals, and actions.
- * @param {object} props
- * @param {object} props.data - The data context from connectors.
- * @param {object} props.data.receipt - The 'receipt' connector data.
- */
 export default function Receipt({ data }) {
   const { receipt } = data;
   const hasItems = receipt.items && receipt.items.length > 0;
 
   return (
     <div
+      id="receipt-container" // ★ Добавляем ID для таргетинга
       atom-socket="receipt-updates"
       atom-on-event="receipt-changed"
       atom-action="POST /action/soft-refresh-receipt"
-      atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
+      atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ
     >
       <h3>Чек</h3>
       
@@ -67,7 +59,7 @@ export default function Receipt({ data }) {
         <p className="final-total"><b>Итого:</b> <b>{receipt.finalTotal || '0.00'} руб.</b></p>
       </div>
 
-      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#pageContent-container"> {/* ★★★ ИЗМЕНЕНО ★★★ */}
+      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#receipt-container"> {/* ★ ИЗМЕНЕНИЕ */}
         <input type="text" name="coupon_code" placeholder="Промокод" />
         <button type="submit" className="action-button">Применить</button>
       </form>
@@ -77,7 +69,7 @@ export default function Receipt({ data }) {
         type="button"
         className="action-button danger"
         atom-action="POST /action/clearReceipt"
-        atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
+        atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ
       >
         Очистить чек
       </button>

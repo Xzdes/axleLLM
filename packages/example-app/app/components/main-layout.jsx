@@ -1,26 +1,33 @@
 // packages/example-app/app/components/main-layout.jsx
 import React from 'react';
-
-// ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: Мы импортируем дочерние компоненты напрямую ★★★
 import Header from './header.jsx';
-// Мы не знаем, какой будет контент, поэтому его оставим динамическим
-// (но теперь его будет передавать родительский компонент, а не движок)
 
 export default function MainLayout(props) {
-  // Извлекаем КОМПОНЕНТ контента страницы, который передается через props.
-  // Это стандартный паттерн в React, называемый "composition".
   const { pageContent: PageComponent } = props.components || {};
+  const currentTheme = props.data?.settings?.currentTheme || 'light';
 
   return (
-    <>
+    // ★ ИЗМЕНЕНИЕ: Оборачиваем все в app-shell
+    <div id="app-shell" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div id="header-container">
-        {/* Header теперь не зависит от "инъекции", он просто рендерится */}
         <Header {...props} />
       </div>
-      <main id="pageContent-container">
-        {/* А контент страницы рендерится как дочерний элемент */}
+      
+      {/* ★ ИЗМЕНЕНИЕ: main теперь растягивается, чтобы кнопка была внизу */}
+      <main id="pageContent-container" style={{ flexGrow: 1, position: 'relative' }}>
         {PageComponent && <PageComponent {...props} />}
       </main>
-    </>
+
+      <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
+        <button
+            className="theme-toggle-button" // ★ ИЗМЕНЕНИЕ: Добавляем класс для стилизации
+            atom-action="POST /action/toggle-theme"
+            // ★ ИЗМЕНЕНИЕ: Обновляем app-shell, а не #root
+            atom-target="#app-shell" 
+        >
+          Switch to {currentTheme === 'light' ? 'Dark' : 'Light'} Theme
+        </button>
+      </div>
+    </div>
   );
 }

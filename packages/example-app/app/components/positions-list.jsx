@@ -1,9 +1,6 @@
-// packages/example-app/app/components/positionsList.jsx
+// packages/example-app/app/components/positions-list.jsx
 import React from 'react';
 
-/**
- * Renders a single item in the positions list.
- */
 function PositionItem({ item }) {
   return (
     <li>
@@ -11,7 +8,7 @@ function PositionItem({ item }) {
       <button
         type="button"
         atom-action="POST /action/addItem"
-        atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
+        atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ: эта кнопка должна обновлять чек!
         name="id"
         value={item.id}
       >
@@ -21,25 +18,14 @@ function PositionItem({ item }) {
   );
 }
 
-/**
- * Displays the list of all available products and a search bar to filter them.
- * @param {object} props
- * @param {object} props.data - The data context from connectors.
- * @param {object} props.data.positions - The 'positions' connector data.
- * @param {Array<object>} props.data.positions.items - The list of all products.
- * @param {object} props.data.viewState - The 'viewState' connector data.
- * @param {string} props.data.viewState.query - The current search query.
- * @param {Array<object>} props.data.viewState.filtered - The filtered list of products.
- */
 export default function PositionsList({ data }) {
   const { positions, viewState } = data;
   
-  // Determine which list of items to display
   const hasQuery = viewState.query && viewState.query.length > 0;
   const itemsToDisplay = hasQuery ? viewState.filtered : positions.items;
 
   return (
-    <div>
+    <div id="positionsList-container"> {/* ★ Добавляем ID для таргетинга */}
       <h3>Товары</h3>
 
       <div className="search-bar">
@@ -48,9 +34,9 @@ export default function PositionsList({ data }) {
           type="text" 
           name="query" 
           placeholder="Найти товар..." 
-          defaultValue={viewState.query} // Use defaultValue for uncontrolled components
+          defaultValue={viewState.query}
           atom-action="POST /action/filterPositions"  
-          atom-target="#pageContent-container" // ★★★ ИЗМЕНЕНО ★★★
+          atom-target="#positionsList-container" // ★ ИЗМЕНЕНИЕ
           atom-event="input"
         />
       </div>

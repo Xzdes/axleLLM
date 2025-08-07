@@ -10,13 +10,24 @@ module.exports = {
     window: { width: 1366, height: 768, devtools: true }
   },
   themes: {
-    default: {
+    // ★★★ НАЧАЛО ИЗМЕНЕНИЙ ★★★
+    "light": {
       "--primary-bg": "#f0f2f5",
       "--secondary-bg": "#FFFFFF",
       "--text-color": "#1a1a1a",
       "--header-height": "60px",
+      "--border-color": "#dee2e6",
+      "--border-radius": "8px"
+    },
+    "dark": {
+      "--primary-bg": "#18191a",
+      "--secondary-bg": "#242526",
+      "--text-color": "#e4e6eb",
+      "--header-height": "60px",
+      "--border-color": "#3a3b3c",
       "--border-radius": "8px"
     }
+    // ★★★ КОНЕЦ ИЗМЕНЕНИЙ ★★★
   },
   globals: {
     appName: "Атомарная Касса",
@@ -33,8 +44,9 @@ module.exports = {
       "emit": { "event": "receipt-changed", "payload": "receipt" }
     }
   },
+  // Эти строки остаются без изменений
   connectors: connectors,
   components: components,
   bridge: bridge,
-  routes: {}, // <-- Эта строка ОБЯЗАТЕЛЬНА
+  routes: {},
 };

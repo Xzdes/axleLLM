@@ -1,22 +1,24 @@
 // packages/example-app/app/components/cashier-page.jsx
 import React from 'react';
 
-// ★★★ НАПОРИСТОЕ ИЗМЕНЕНИЕ: Мы импортируем дочерние компоненты напрямую ★★★
-// Компонент "касса" всегда содержит список товаров и чек.
-import PositionsList from './positions-list.jsx';
-import Receipt from './receipt.jsx';
+// Этот компонент больше не импортирует PositionsList и Receipt.
+// Он стал простым layout-компонентом для основного экрана.
+// Он получает дочерние компоненты через props.components от движка.
 
 export default function CashierPage(props) {
-  // Теперь нам не нужно ничего извлекать из props.components.
-  // Композиция определена здесь, статически и надежно.
+  // Извлекаем дочерние компоненты, которые движок "впрыснул" согласно `view`-роуту.
+  // Имена (positionsList, receipt) должны совпадать с ключами в секции `inject` в роуте.
+  const { positionsList: PositionsList, receipt: Receipt } = props.components || {};
 
   return (
     <div className="cashier-page-wrapper">
       <div id="positionsList-container">
-        <PositionsList {...props} />
+        {/* Если компонент был инжектирован, рендерим его, передавая все props дальше */}
+        {PositionsList && <PositionsList {...props} />}
       </div>
       <div id="receipt-container">
-        <Receipt {...props} />
+        {/* Аналогично для второго компонента */}
+        {Receipt && <Receipt {...props} />}
       </div>
     </div>
   );
