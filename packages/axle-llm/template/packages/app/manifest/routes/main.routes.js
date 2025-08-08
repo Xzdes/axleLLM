@@ -8,11 +8,8 @@ module.exports = {
   "GET /": {
     "type": "view",
     "layout": "mainLayout",
-    // Мы "читаем" данные из `viewState`, потому что наш компонент
-    // `homePage` требует их согласно своей схеме.
-    "reads": ["viewState"],
+    "reads": ["viewState", "globals"], // globals нужны для кастомного title bar
     "inject": {
-      // Вставляем `homePage` в `mainLayout`.
       "pageContent": "homePage"
     }
   },
@@ -23,14 +20,10 @@ module.exports = {
    */
   "POST /action/change-message": {
     "type": "action",
-    // Нам нужно "прочитать" текущее состояние, чтобы его изменить.
     "reads": ["viewState"],
-    // Мы "записываем" изменения обратно в `viewState`.
-    // Движок автоматически сохранит данные после выполнения шагов.
     "writes": ["viewState"],
-    // После выполнения, мы приказываем клиенту перерисовать `homePage`
-    // с новыми данными.
-    "update": "homePage",
+    // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Мы обновляем главный layout, а не отдельный компонент ★★★
+    "update": "mainLayout",
     "steps": [
       { "log": "Button was clicked! Changing message..." },
       { 

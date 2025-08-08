@@ -8,8 +8,7 @@ window.axle.components = window.axle.components || {};
 let socketId = null;
 let currentActionController = null;
 let ws = null;
-let mainRoot = null; // ★★★ НОВОЕ: Хранилище для главного корня React ★★★
-const componentRoots = new Map();
+let mainRoot = null; 
 const activeSocketSubscriptions = new Set();
 
 export function initialize() {
@@ -35,9 +34,13 @@ function hydrateRoot() {
     if (!window.React || !window.ReactDOM) {
       return console.error('[axle-client] CRITICAL: React or ReactDOM not found on window object.');
     }
+    // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+    // Компонент-оболочка ДОЛЖЕН БЫТЬ ПУСТЫМ.
+    // Это говорит React: "Не рендери ничего нового, просто возьми под контроль
+    // тот HTML, который УЖЕ находится внутри rootElement".
     const ClientAppShell = () => null;
-    // ★★★ ИЗМЕНЕНИЕ: Сохраняем главный корень ★★★
-    mainRoot = window.ReactDOM.hydrateRoot(rootElement, window.React.createElement(ClientAppShell, {}));
+    mainRoot = window.ReactDOM.hydrateRoot(rootElement, React.createElement(ClientAppShell));
+    // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
     console.log('[axle-client] Hydration complete.');
   } catch (e) {
     console.error('[axle-client] CRITICAL: Hydration failed.', e);
@@ -56,7 +59,6 @@ async function handleDOMEvent(event) {
 
 async function executeAction(element, triggerType) {
   const action = element.getAttribute('atom-action');
-  const targetSelector = element.getAttribute('atom-target');
   if (!action) return;
 
   if (triggerType === 'input' && currentActionController) {
@@ -77,54 +79,60 @@ async function executeAction(element, triggerType) {
     if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
     
     const payload = await response.json();
-    await processServerPayload(payload, targetSelector);
+    await processServerPayload(payload);
 
   } catch (error) {
     if (error.name !== 'AbortError') console.error(`[axle-client] Action failed for "${action}":`, error);
   }
 }
 
-async function processServerPayload(payload, targetSelector) {
-    // ... (код bridgeCalls и awaitingBridgeCall остается без изменений) ...
-
+async function processServerPayload(payload) {
   if (payload.redirect) {
     window.location.href = payload.redirect;
     return;
   }
 
-  // ★★★ НАЧАЛО КЛЮЧЕВЫХ ИЗМЕНЕНИЙ ★★★
+  if (payload.bridgeCalls) {
+    for (const call of payload.bridgeCalls) {
+      window.axleBridge.call(call.api, call.args);
+    }
+  }
+
+  if (payload.awaitingBridgeCall) {
+    const { callId, api, args } = payload.awaitingBridgeCall;
+    try {
+      const result = await window.axleBridge.call(api, args);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'bridge_call_response', payload: { callId, result } }));
+      }
+    } catch (error) {
+      console.error(`[axle-client] Awaitable bridge call failed for API '${api}':`, error);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'bridge_call_response', payload: { callId, error: error.message } }));
+      }
+    }
+    return;
+  }
+  
   if (payload.update) {
     const { update: componentName, props } = payload;
-    if (!props) return console.error(`[axle-client] Invalid payload for update on "${componentName}": 'props' is missing.`);
     
-    const Component = window.axle.components[componentName];
-    if (!Component) return console.error(`[axle-client] Component definition for '${componentName}' not found.`);
-
-    const targetElement = document.querySelector(targetSelector);
-    if (!targetElement) return console.error(`[axle-client] Target element "${targetSelector}" not found.`);
-
-    // Сохраняем новые данные для возможного использования другими скриптами
-    if (props.data) window.__INITIAL_DATA__ = props.data;
-
-    let rootToRenderOn;
-    
-    // Если цель - это главный корень приложения, используем сохраненный `mainRoot`
-    if (targetSelector === '#root' && mainRoot) {
-        rootToRenderOn = mainRoot;
-    } else {
-        // В противном случае, ищем или создаем корень для конкретного компонента
-        let root = componentRoots.get(targetSelector);
-        if (!root) {
-            root = window.ReactDOM.createRoot(targetElement);
-            componentRoots.set(targetSelector, root);
-        }
-        rootToRenderOn = root;
+    if (!mainRoot) {
+      return console.error("[axle-client] Cannot update UI: main React root is not initialized.");
+    }
+    if (!props) {
+      return console.error(`[axle-client] Invalid payload for update on "${componentName}": 'props' is missing.`);
     }
     
-    // Выполняем рендер на правильном корне
-    rootToRenderOn.render(window.React.createElement(Component, props));
+    const ComponentToRender = window.axle.components[componentName];
+    if (!ComponentToRender) {
+      return console.error(`[axle-client] Component definition for '${componentName}' not found.`);
+    }
+
+    if (props.data) window.__INITIAL_DATA__ = props.data;
+
+    mainRoot.render(window.React.createElement(ComponentToRender, props));
   }
-  // ★★★ КОНЕЦ КЛЮЧЕВЫХ ИЗМЕНЕНИЙ ★★★
 }
 
 function getActionBody(element) {
@@ -136,17 +144,12 @@ function getActionBody(element) {
   if (element.name && element.value !== undefined && !data.hasOwnProperty(element.name)) data[element.name] = element.value;
   return JSON.stringify(data);
 }
-/**
- * Инициализирует WebSocket.
- */
+
 function initializeWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${window.location.host}`);
   
-  ws.onopen = () => {
-    console.log('[axle-client] WebSocket connection established.');
-    scanAndSubscribeToSockets();
-  };
+  ws.onopen = () => console.log('[axle-client] WebSocket connection established.');
   
   ws.onmessage = (message) => {
     try {
@@ -156,6 +159,8 @@ function initializeWebSocket() {
         console.log(`[axle-client] WebSocket ID assigned: ${socketId}`);
       } else if (data.type === 'event' && data.event) {
         document.querySelectorAll(`[atom-on-event="${data.event}"]`).forEach(el => executeAction(el, 'websocket'));
+      } else if (data.type === 'action_response') {
+        processServerPayload(data.payload);
       }
     } catch (e) { 
       console.error('[axle-client] Failed to handle WebSocket message:', e);
@@ -164,9 +169,7 @@ function initializeWebSocket() {
 
   ws.onclose = () => {
     console.log('[axle-client] WebSocket connection closed. Reconnecting in 3 seconds...');
-    socketId = null; 
-    ws = null;
-    activeSocketSubscriptions.clear();
+    socketId = null; ws = null; activeSocketSubscriptions.clear();
     setTimeout(initializeWebSocket, 3000);
   };
 
@@ -176,9 +179,6 @@ function initializeWebSocket() {
   };
 }
 
-/**
- * Сканирует DOM на предмет подписок на WebSocket.
- */
 function scanAndSubscribeToSockets() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   document.querySelectorAll('[atom-socket]').forEach(el => {
@@ -190,9 +190,6 @@ function scanAndSubscribeToSockets() {
   });
 }
 
-/**
- * Наблюдает за изменениями в DOM для новых подписок.
- */
 function initializeMutationObserver() {
     const observer = new MutationObserver((mutations) => {
         if (mutations.some(m => m.type === 'childList' && m.addedNodes.length > 0)) {

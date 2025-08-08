@@ -13,9 +13,8 @@ export default function HomePage({ data }) {
       
       <button
         atom-action="POST /action/change-message"
-        // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ★★★
-        // Мы нацеливаем обновление на стабильный контейнер из main-layout.jsx
-        atom-target="#page-content-wrapper"
+        // ★★★ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Обновление теперь нацелено на #root ★★★
+        atom-target="#root"
       >
         Click Me to Change the Message
       </button>

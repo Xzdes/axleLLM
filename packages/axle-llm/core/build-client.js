@@ -21,14 +21,16 @@ async function runClientBuild() {
             platform: 'browser',
             format: 'iife',
             sourcemap: true,
-            write: false,
+            write: false, // Мы будем сами собирать финальный бандл
         };
         
         const assembleAndWriteBundle = async () => {
             try {
+                // Сначала собираем ядро клиента
                 const result = await esbuild.build(buildOptions);
                 let finalContent = result.outputFiles[0].text;
                 
+                // Затем добавляем в бандл скомпилированные React-компоненты
                 if (fs.existsSync(clientComponentsDir)) {
                     const componentFiles = fs.readdirSync(clientComponentsDir);
                     for (const file of componentFiles) {
@@ -36,11 +38,11 @@ async function runClientBuild() {
                             const componentName = path.basename(file, '.js');
                             const componentContent = fs.readFileSync(path.join(clientComponentsDir, file), 'utf-8');
                             
-                            // ★★★ ГЛАВНОЕ ИСПРАВЛЕНИЕ ★★★
-                            // Мы убираем лишнюю обертку (function() { ... })();
-                            // Код компонента (который уже является IIFE и создает глобальную
-                            // переменную `axleComponent`) и код регистрации вставляются напрямую.
-                            // Это гарантирует, что `axleComponent` будет в глобальной области видимости.
+                            // ★★★ НАДЕЖНОЕ ИСПРАВЛЕНИЕ ★★★
+                            // Код компонента, который уже является IIFE и создает глобальную переменную
+                            // `axleComponent`, и код регистрации вставляются напрямую.
+                            // Это гарантирует, что `axleComponent` будет в глобальной области видимости,
+                            // а `window.axle.components` будет корректно наполнен.
                             const registrationScript = `
 try {
   if (window.axleComponent) {
@@ -48,6 +50,7 @@ try {
   } else {
     console.error("Failed to register component '${componentName}': window.axleComponent was not defined.");
   }
+  window.axleComponent = undefined; // Очищаем для следующего компонента
 } catch(e) { console.error('Error during component registration for ${componentName}:', e); }
 `;
                             // Сначала вставляем код компонента, потом код регистрации.
@@ -75,8 +78,8 @@ try {
         await runAndSignal();
 
         if (isWatchMode) {
-            const watcherCallback = async () => {
-                console.log(`[axle-client-build] Change detected. Re-assembling bundle...`);
+            const watcherCallback = async (eventType, filename) => {
+                console.log(`[axle-client-build] Change detected in '${filename}'. Re-assembling bundle...`);
                 await assembleAndWriteBundle();
                 console.log(`[axle-client-build] ✨ Bundle re-assembled.`);
             };

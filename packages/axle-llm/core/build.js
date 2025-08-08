@@ -61,23 +61,15 @@ async function runBuild() {
 
         const commonOptions = {
             entryPoints: entryPointsObject,
-            jsx: 'transform',
-            jsxFactory: 'React.createElement',
-            jsxFragment: 'React.Fragment',
+            jsx: 'automatic',
         };
 
         const serverOptions = {
             ...commonOptions,
-            // ★★★ НАПОРИСТОЕ ИСПРАВЛЕНИЕ ★★★
-            // Мы говорим сборщику не просто транслировать файлы, а СОБИРАТЬ ИХ В БАНДЛ.
-            // Это заставит его правильно обработать все внутренние `import`.
             bundle: true,
-            // ★★★ КОНЕЦ ИСПРАВЛЕНИЯ ★★★
             outdir: serverOutDir,
             platform: 'node',
             format: 'cjs',
-            // Мы должны явно указать, что React - это внешняя зависимость,
-            // чтобы esbuild не пытался включить его в бандл.
             external: ['react', 'react-dom'],
             plugins: [{
                 name: 'server-reporter',
@@ -91,7 +83,8 @@ async function runBuild() {
                 },
             }],
         };
-
+        
+        // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
         const clientOptions = {
             ...commonOptions,
             outdir: clientOutDir,
@@ -99,6 +92,10 @@ async function runBuild() {
             platform: 'browser',
             format: 'iife',
             globalName: 'axleComponent',
+            // `external` было неправильным подходом. Вместо этого мы используем `define`.
+            // `define` — это прямая замена текста во время сборки.
+            // Esbuild заменит все вхождения 'React' на 'window.React' и 'ReactDOM' на 'window.ReactDOM'.
+            // Это решает проблему `require('react')` в браузере.
             define: {
                 'React': 'window.React',
                 'ReactDOM': 'window.ReactDOM'
@@ -115,6 +112,7 @@ async function runBuild() {
                 },
             }],
         };
+        // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
 
         if (isWatchMode) {
             console.log('[axle-build] Starting watchers...');

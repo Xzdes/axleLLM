@@ -1,10 +1,9 @@
-// packages/example-app/manifest/routes/cashier.routes.js
 module.exports = {
   // --- ГЛАВНЫЙ VIEW-РОУТ ПРИЛОЖЕНИЯ ---
   "GET /": {
     "type": "view",
     "layout": "mainLayout",
-    // ★ ИЗМЕНЕНИЕ: Добавляем 'settings', чтобы UI знал текущую тему
+    // ★ ИСПРАВЛЕНИЕ: "globals" удален из этого массива, так как движок предоставляет их автоматически.
     "reads": ["user", "receipt", "positions", "viewState", "settings"],
     "inject": {
       "header": "header",
@@ -33,7 +32,7 @@ module.exports = {
     "type": "action", 
     "reads": ["positions", "receipt"], 
     "writes": ["receipt"], 
-    "update": "receipt", // ★ ИЗМЕНЕНИЕ: Обновляем только чек
+    "update": "mainLayout",
     "steps": [
         { "set": "context.productToAdd", "to": "data.positions.items.find(p => p.id == body.id)" }, 
         { "set": "context.itemInReceipt", "to": "data.receipt.items.find(i => i.id == body.id)" }, 
@@ -46,7 +45,7 @@ module.exports = {
     "type": "action", 
     "reads": ["receipt"], 
     "writes": ["receipt"], 
-    "update": "receipt", // ★ ИЗМЕНЕНИЕ: Обновляем только чек
+    "update": "mainLayout",
     "steps": [
         { "set": "data.receipt.items", "to": "data.receipt.items.filter(i => i.id != body.id)" }, 
         { "action:run": { "name": "recalculateReceiptLogic" } }
@@ -56,7 +55,7 @@ module.exports = {
     "type": "action", 
     "reads": ["receipt"], 
     "writes": ["receipt"], 
-    "update": "receipt", // ★ ИЗМЕНЕНИЕ: Обновляем только чек
+    "update": "mainLayout",
     "steps": [
         { "set": "data.receipt.items", "to": "[]" }, 
         { "set": "data.receipt.discountPercent", "to": "0" }, 
@@ -68,7 +67,7 @@ module.exports = {
     "type": "action", 
     "reads": ["receipt"], 
     "writes": ["receipt"], 
-    "update": "receipt", // ★ ИЗМЕНЕНИЕ: Обновляем только чек
+    "update": "mainLayout",
     "steps": [
         { "set": "data.receipt.statusMessage", "to": "'Неверный купон!'" }, 
         { "set": "data.receipt.discountPercent", "to": "0" }, 
@@ -82,13 +81,13 @@ module.exports = {
     "type": "action", 
     "reads": ["positions", "viewState"], 
     "writes": ["viewState"], 
-    "update": "positionsList", // ★ ИЗМЕНЕНИЕ: Обновляем только список товаров
+    "update": "mainLayout",
     "steps": [{ "run": "filterPositions" }]
   },
   "POST /action/soft-refresh-receipt": {  
     "type": "action",  
     "reads": ["receipt"],  
-    "update": "receipt", // ★ ИЗМЕНЕНИЕ: Обновляем только чек
+    "update": "mainLayout",
     "steps": [] 
   },
   

@@ -10,7 +10,7 @@ class AuthEngine {
 
     this.userConnector = null;
     this.sessionConnector = null;
-    // ★ ИЗМЕНЕНИЕ: Будем хранить прямые ссылки на коллекции БД
+    // ★★★ ИСПРАВЛЕНИЕ: Будем хранить прямые ссылки на коллекции БД для производительности ★★★
     this.userCollection = null;
     this.sessionCollection = null;
   }
@@ -31,7 +31,7 @@ class AuthEngine {
       throw new Error("[AuthEngine] Could not retrieve user or session connectors.");
     }
     
-    // ★ ИЗМЕНЕНИЕ: Получаем и сохраняем экземпляры коллекций
+    // ★★★ ИСПРАВЛЕНИЕ: Получаем и сохраняем экземпляры коллекций ★★★
     // `wise-json-db` имеет свой собственный кэш, и работа с коллекцией напрямую надежнее.
     await this.userConnector.initPromise;
     await this.sessionConnector.initPromise;
@@ -47,14 +47,14 @@ class AuthEngine {
       return null;
     }
 
-    // ★ ИЗМЕНЕНИЕ: Используем прямой поиск по ID, это гораздо эффективнее.
+    // ★★★ ИСПРАВЛЕНИЕ: Используем прямой поиск по ID, это гораздо эффективнее, чем читать всю коллекцию ★★★
     const sessionData = await this.sessionCollection.getById(sessionId);
 
     if (!sessionData || !sessionData.userId) {
       return null;
     }
     
-    // ★ ИЗМЕНЕНИЕ: Используем прямой поиск по ID пользователя.
+    // ★★★ ИСПРАВЛЕНИЕ: Используем прямой поиск по ID пользователя ★★★
     const user = await this.userCollection.getById(sessionData.userId);
 
     return user || null;
@@ -72,13 +72,13 @@ class AuthEngine {
       createdAt: new Date().toISOString()
     };
     
-    // ★ ИЗМЕНЕНИЕ: Используем метод `insert` для добавления одной записи.
+    // ★★★ ИСПРАВЛЕНИЕ: Используем метод `insert` для добавления одной записи ★★★
     await this.sessionCollection.insert(sessionData);
 
     return cookie.serialize('session_id', sessionId, {
       httpOnly: true,
       path: '/',
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 дней
       sameSite: 'lax'
     });
   }
@@ -88,14 +88,14 @@ class AuthEngine {
     const sessionId = cookies.session_id;
 
     if (sessionId) {
-      // ★ ИЗМЕНЕНИЕ: Используем метод `remove` для удаления одной записи.
+      // ★★★ ИСПРАВЛЕНИЕ: Используем метод `remove` для удаления одной записи ★★★
       await this.sessionCollection.remove(sessionId);
     }
 
     return cookie.serialize('session_id', '', {
       httpOnly: true,
       path: '/',
-      maxAge: -1
+      maxAge: -1 // Удаляем куки
     });
   }
 

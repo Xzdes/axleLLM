@@ -9,7 +9,7 @@ function ReceiptItem({ item }) {
         className="remove-btn"
         type="button"
         atom-action="POST /action/removeItem"
-        atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ
+        atom-target="#root" // ★ ИСПРАВЛЕНИЕ
         name="id"
         value={item.id}
       >
@@ -25,18 +25,16 @@ export default function Receipt({ data }) {
 
   return (
     <div
-      id="receipt-container" // ★ Добавляем ID для таргетинга
+      id="receipt-container"
       atom-socket="receipt-updates"
       atom-on-event="receipt-changed"
       atom-action="POST /action/soft-refresh-receipt"
-      atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ
+      atom-target="#root" // ★ ИСПРАВЛЕНИЕ
     >
       <h3>Чек</h3>
       
       {receipt.statusMessage && (
-        <p className="status-message">
-          {receipt.statusMessage}
-        </p>
+        <p className="status-message">{receipt.statusMessage}</p>
       )}
 
       {hasItems ? (
@@ -59,45 +57,39 @@ export default function Receipt({ data }) {
         <p className="final-total"><b>Итого:</b> <b>{receipt.finalTotal || '0.00'} руб.</b></p>
       </div>
 
-      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#receipt-container"> {/* ★ ИЗМЕНЕНИЕ */}
+      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#root"> {/* ★ ИСПРАВЛЕНИЕ */}
         <input type="text" name="coupon_code" placeholder="Промокод" />
         <button type="submit" className="action-button">Применить</button>
       </form>
 
       <button 
-        id="clear-btn"
         type="button"
         className="action-button danger"
         atom-action="POST /action/clearReceipt"
-        atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ
+        atom-target="#root" // ★ ИСПРАВЛЕНИЕ
       >
         Очистить чек
       </button>
       
+      {/* Для bridge-вызовов таргет не нужен, так как они не обновляют UI напрямую */}
       <button 
-        type="button"
-        className="action-button"
-        style={{ marginTop: '10px', backgroundColor: '#e6f7ff' }}
-        atom-action="GET /action/showInfo"
-      >
+        type="button" className="action-button"
+        style={{ marginTop: '10px' }}
+        atom-action="GET /action/showInfo" >
         Показать инфо (Тест Моста)
       </button>
 
       <button 
-        type="button"
-        className="action-button"
+        type="button" className="action-button"
         style={{ marginTop: '10px' }}
-        atom-action="GET /action/open-file"
-      >
+        atom-action="GET /action/open-file" >
         Прикрепить файл...
       </button>
 
       <button 
-        type="button"
-        className="action-button"
+        type="button" className="action-button"
         style={{ marginTop: '10px' }}
-        atom-action="POST /action/saveReceipt"
-      >
+        atom-action="POST /action/saveReceipt" >
         Сохранить чек в файл
       </button>
     </div>

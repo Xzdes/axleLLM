@@ -8,7 +8,8 @@ function PositionItem({ item }) {
       <button
         type="button"
         atom-action="POST /action/addItem"
-        atom-target="#receipt-container" // ★ ИЗМЕНЕНИЕ: эта кнопка должна обновлять чек!
+        // ★★★ ИСПРАВЛЕНИЕ: Обновляем всё приложение через #root ★★★
+        atom-target="#root"
         name="id"
         value={item.id}
       >
@@ -25,7 +26,8 @@ export default function PositionsList({ data }) {
   const itemsToDisplay = hasQuery ? viewState.filtered : positions.items;
 
   return (
-    <div id="positionsList-container"> {/* ★ Добавляем ID для таргетинга */}
+    // Этот ID больше не используется для таргетинга, но может быть полезен для стилей
+    <div id="positionsList-container">
       <h3>Товары</h3>
 
       <div className="search-bar">
@@ -36,7 +38,8 @@ export default function PositionsList({ data }) {
           placeholder="Найти товар..." 
           defaultValue={viewState.query}
           atom-action="POST /action/filterPositions"  
-          atom-target="#positionsList-container" // ★ ИЗМЕНЕНИЕ
+          // ★★★ ИСПРАВЛЕНИЕ: Обновляем всё приложение через #root ★★★
+          atom-target="#root"
           atom-event="input"
         />
       </div>

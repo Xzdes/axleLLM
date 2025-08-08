@@ -2,7 +2,6 @@
 const path = require('path');
 const React = require('react');
 const ReactDOMServer = require('react-dom/server');
-const util = require('util');
 
 class Renderer {
   constructor(assetLoader, manifest, appPath) {
@@ -19,62 +18,73 @@ class Renderer {
       const componentModule = require(componentPath);
       return componentModule.default || componentModule;
     } catch (error) {
-      console.error(`[Renderer-LOG] CRITICAL: Failed to load compiled component '${componentName}' from ${componentPath}.`);
+      console.error(`[Renderer] CRITICAL: Failed to load compiled component '${componentName}' from ${componentPath}.`);
       throw error;
     }
   }
 
+  // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ CSS ★★★
+  // Радикально упрощаем. Больше никакой хрупкой изоляции.
+  // Просто собираем все стили и вставляем их в <head>.
   _getAllStyles() {
     let allStyles = '';
-    const allComponentNames = Object.keys(this.manifest.components || {});
-    for (const name of allComponentNames) {
-      const style = this.assetLoader.getStyleForComponent(name);
-      if (style) {
-        allStyles += `<style data-component-name="${name}">${style}</style>\n`;
+    const componentsConfig = this.manifest.components || {};
+
+    for (const name in componentsConfig) {
+      const config = componentsConfig[name];
+      if (config && config.style) {
+        const cssContent = this.assetLoader.getStyleForComponent(name);
+        if (cssContent) {
+            allStyles += `<style data-component-name="${name}">\n${cssContent}\n</style>\n`;
+        }
       }
     }
     return allStyles;
   }
-
+  // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ CSS ★★★
+  
+  _getInjectedComponentTypes(routeConfig) {
+      const injectedComponentTypes = {};
+      if (routeConfig && routeConfig.inject) {
+          for (const placeholder in routeConfig.inject) {
+              const componentName = routeConfig.inject[placeholder];
+              if (componentName) {
+                  const InjectedComponent = this._loadCompiledComponent(componentName);
+                  if (InjectedComponent) {
+                      injectedComponentTypes[placeholder] = InjectedComponent;
+                  }
+              }
+          }
+      }
+      return injectedComponentTypes;
+  }
+  
   async renderView(routeConfig, dataContext, reqUrl) {
     const layoutName = routeConfig.layout;
     if (!layoutName) throw new Error(`[Renderer] Route config is missing 'layout' property.`);
     
     const LayoutComponent = this._loadCompiledComponent(layoutName);
-    if (!LayoutComponent) return `<html><body>Error: Layout component could not be loaded.</body></html>`;
+    if (!LayoutComponent) return `<html><body>Error: Layout component '${layoutName}' could not be loaded.</body></html>`;
     
-    // Разделяем данные: user отдельно, connectorData отдельно.
     const { user, ...connectorData } = dataContext;
     
     const props = {
-      data: connectorData, // В props.data идут только данные коннекторов
+      data: connectorData,
       user: user,
       globals: this.manifest.globals || {},
       url: this._getUrlContext(reqUrl),
+      components: this._getInjectedComponentTypes(routeConfig),
     };
-
-    const injectedComponentTypes = {};
-    if (routeConfig.inject) {
-      for (const placeholder in routeConfig.inject) {
-        const componentName = routeConfig.inject[placeholder];
-        if (componentName) {
-          const InjectedComponent = this._loadCompiledComponent(componentName);
-          if (InjectedComponent) {
-            injectedComponentTypes[placeholder] = InjectedComponent;
-          }
-        }
-      }
-    }
     
-    const finalProps = { ...props, components: injectedComponentTypes };
-    const appHtml = ReactDOMServer.renderToString(React.createElement(LayoutComponent, finalProps));
+    // Рендерим HTML как и раньше
+    const appHtml = ReactDOMServer.renderToString(React.createElement(LayoutComponent, props));
     
+    // Используем новый, надежный метод получения стилей
     const renderedStyles = this._getAllStyles();
-    // ★★★ ИЗМЕНЕНИЕ: Передаем весь контекст в _getThemeStyles ★★★
     const themeStyles = this._getThemeStyles(dataContext);
 
     const finalHtml = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="${dataContext?.settings?.currentTheme || 'light'}">
 <head>
     <meta charset="UTF-8">
     <title>${this.manifest.launch.title || 'AxleLLM App'}</title>
@@ -85,7 +95,6 @@ class Renderer {
     <div id="root">${appHtml}</div>
     <script>
       window.axle = { components: {} };
-      // ★★★ ИЗМЕНЕНИЕ: Сериализуем только connectorData ★★★
       window.__INITIAL_DATA__ = ${JSON.stringify(connectorData)};
     </script>
     <script src="/public/bundle.js"></script>
@@ -95,20 +104,13 @@ class Renderer {
     return finalHtml;
   }
   
-  // ★★★ НАЧАЛО КЛЮЧЕВЫХ ИЗМЕНЕНИЙ ★★★
   _getThemeStyles(dataContext) {
     const themesConfig = this.manifest.themes;
-    if (!themesConfig || Object.keys(themesConfig).length === 0) {
-      return '';
-    }
+    if (!themesConfig || Object.keys(themesConfig).length === 0) return '';
 
-    // 1. Определяем, какую тему использовать.
-    // Пытаемся взять из данных 'settings.currentTheme'.
     const currentThemeName = dataContext?.settings?.currentTheme || Object.keys(themesConfig)[0];
-    
-    // 2. Выбираем объект с переменными для этой темы.
-    // Если тема с таким именем не найдена, используем первую доступную как фолбэк.
     const themeVariables = themesConfig[currentThemeName] || themesConfig[Object.keys(themesConfig)[0]];
+    if (!themeVariables) return '';
 
     const cssVariables = Object.entries(themeVariables)
       .map(([key, value]) => `  ${key}: ${value};`)
@@ -116,7 +118,6 @@ class Renderer {
       
     return `<style id="axle-theme-variables">\n:root {\n${cssVariables}\n}\n</style>`;
   }
-  // ★★★ КОНЕЦ КЛЮЧЕВЫХ ИЗМЕНЕНИЙ ★★★
 
   _getUrlContext(reqUrl) {
     if (!reqUrl) return { pathname: '/', query: {} };

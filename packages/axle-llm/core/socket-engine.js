@@ -8,8 +8,6 @@ class SocketEngine {
         this.connectorManager = connectorManager;
         this.clients = new Map();
         this.channels = new Map();
-        
-        // Хранилище для "продолжений" (функций, которые нужно выполнить после ответа клиента)
         this.pendingAwaits = new Map();
 
         this.wss = new WebSocket.Server({ server: httpServer });
@@ -36,38 +34,36 @@ class SocketEngine {
         }
     }
     
+    // ★★★ ИСПРАВЛЕНИЕ: registerContinuation теперь не возвращает Promise ★★★
     registerContinuation(clientId, callDetails, continuation) {
-        return new Promise((resolve, reject) => {
-            const ws = this.clients.get(clientId);
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                return reject(new Error('Client for awaitable bridge call is not connected.'));
-            }
+        const ws = this.clients.get(clientId);
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            throw new Error('Client for awaitable bridge call is not connected.');
+        }
 
-            const callId = crypto.randomBytes(16).toString('hex');
-            
-            this.pendingAwaits.set(callId, {
-                continuation: continuation,
-                clientId: clientId
-            });
-
-            setTimeout(() => {
-                if (this.pendingAwaits.has(callId)) {
-                    this.pendingAwaits.delete(callId);
-                    // Вместо reject, который уронит сервер, просто логируем
-                    console.warn(`[SocketEngine] Awaitable call ${callId} timed out after 1 minute.`);
-                }
-            }, 60000);
-
-            const httpResponsePayload = {
-                awaitingBridgeCall: {
-                    callId,
-                    api: callDetails.api,
-                    args: callDetails.args,
-                }
-            };
-            
-            resolve(httpResponsePayload);
+        const callId = crypto.randomBytes(16).toString('hex');
+        
+        this.pendingAwaits.set(callId, {
+            continuation: continuation,
+            clientId: clientId
         });
+
+        // Таймаут для очистки "зависших" вызовов
+        setTimeout(() => {
+            if (this.pendingAwaits.has(callId)) {
+                console.warn(`[SocketEngine] Awaitable call ${callId} timed out after 1 minute.`);
+                this.pendingAwaits.delete(callId);
+            }
+        }, 60000);
+
+        // Возвращаем полезную нагрузку для немедленного ответа по HTTP
+        return {
+            awaitingBridgeCall: {
+                callId,
+                api: callDetails.api,
+                args: callDetails.args,
+            }
+        };
     }
 
     async _handleBridgeResponse(payload) {
@@ -78,11 +74,11 @@ class SocketEngine {
             this.pendingAwaits.delete(callId);
             if (error) {
                 console.error(`[SocketEngine] Client-side bridge call failed for callId ${callId}:`, error);
-                // Можно добавить логику отката/уведомления об ошибке
+                // В будущем здесь можно реализовать логику отката или уведомления
                 return;
             }
             try {
-                // Вызываем сохраненное продолжение с результатом от клиента
+                // Вызываем сохраненное "продолжение" экшена с результатом от клиента
                 await pending.continuation(result);
             } catch(e) {
                 console.error(`[SocketEngine] Error executing continuation for callId ${callId}:`, e);
@@ -126,21 +122,34 @@ class SocketEngine {
     async notifyOnWrite(connectorName, initiatorId = null) {
         for (const [channelName, channel] of this.channels.entries()) {
             if (channel.config.watch === connectorName) {
-                const connectorData = await this.connectorManager.getConnector(connectorName).read();
-                const message = JSON.stringify({
-                    event: channel.config.emit.event,
-                    payload: connectorData
-                });
-                channel.subscribers.forEach(subscriberId => {
-                    // Не отправляем обновление тому, кто его инициировал, т.к. его UI уже обновлен.
-                    if (subscriberId !== initiatorId) {
-                        this.sendToClient(subscriberId, {
-                            type: 'event', // Общий тип для событий
-                            event: channel.config.emit.event,
-                            payload: connectorData
+                // Находим все view-роуты, которые читают этот коннектор
+                for (const routeKey in this.manifest.routes) {
+                    const route = this.manifest.routes[routeKey];
+                    if (route.type === 'view' && route.reads?.includes(connectorName)) {
+                        channel.subscribers.forEach(async (subscriberId) => {
+                            if (subscriberId !== initiatorId) {
+                                // Для каждого подписчика мы заново собираем полный контекст его view
+                                const data = await this.connectorManager.getContext(route.reads || []);
+                                const props = {
+                                    data,
+                                    // User и globals нужно будет получать актуальные, это упрощение
+                                    user: null, 
+                                    globals: this.manifest.globals,
+                                    components: this.renderer._getInjectedComponentTypes(route)
+                                };
+
+                                this.sendToClient(subscriberId, {
+                                    type: 'event',
+                                    event: channel.config.emit.event,
+                                    payload: {
+                                        update: route.layout,
+                                        props: props,
+                                    }
+                                });
+                            }
                         });
                     }
-                });
+                }
             }
         }
     }
