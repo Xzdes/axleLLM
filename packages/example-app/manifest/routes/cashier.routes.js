@@ -1,9 +1,7 @@
 module.exports = {
-  // --- ГЛАВНЫЙ VIEW-РОУТ ПРИЛОЖЕНИЯ ---
   "GET /": {
     "type": "view",
     "layout": "mainLayout",
-    // ★ ИСПРАВЛЕНИЕ: "globals" удален из этого массива, так как движок предоставляет их автоматически.
     "reads": ["user", "receipt", "positions", "viewState", "settings"],
     "inject": {
       "header": "header",
@@ -14,7 +12,6 @@ module.exports = {
     "auth": { "required": true, "failureRedirect": "/login" }
   },
 
-  // --- ВНУТРЕННИЙ (HELPER) ACTION-РОУТ ДЛЯ ПЕРЕСЧЕТА ---
   "recalculateReceiptLogic": {
     "type": "action",
     "internal": true,
@@ -27,12 +24,11 @@ module.exports = {
     ]
   },
 
-  // --- ACTION-РОУТЫ, УПРАВЛЯЮЩИЕ ЧЕКОМ ---
   "POST /action/addItem": { 
     "type": "action", 
     "reads": ["positions", "receipt"], 
     "writes": ["receipt"], 
-    "update": "mainLayout",
+    "update": "receipt", // ★ ЛОГИЧНО: эта операция обновляет чек
     "steps": [
         { "set": "context.productToAdd", "to": "data.positions.items.find(p => p.id == body.id)" }, 
         { "set": "context.itemInReceipt", "to": "data.receipt.items.find(i => i.id == body.id)" }, 
@@ -45,7 +41,7 @@ module.exports = {
     "type": "action", 
     "reads": ["receipt"], 
     "writes": ["receipt"], 
-    "update": "mainLayout",
+    "update": "receipt", // ★ ЛОГИЧНО: эта операция обновляет чек
     "steps": [
         { "set": "data.receipt.items", "to": "data.receipt.items.filter(i => i.id != body.id)" }, 
         { "action:run": { "name": "recalculateReceiptLogic" } }
@@ -55,7 +51,7 @@ module.exports = {
     "type": "action", 
     "reads": ["receipt"], 
     "writes": ["receipt"], 
-    "update": "mainLayout",
+    "update": "receipt", // ★ ЛОГИЧНО: эта операция обновляет чек
     "steps": [
         { "set": "data.receipt.items", "to": "[]" }, 
         { "set": "data.receipt.discountPercent", "to": "0" }, 
@@ -67,7 +63,7 @@ module.exports = {
     "type": "action", 
     "reads": ["receipt"], 
     "writes": ["receipt"], 
-    "update": "mainLayout",
+    "update": "receipt", // ★ ЛОГИЧНО: эта операция обновляет чек
     "steps": [
         { "set": "data.receipt.statusMessage", "to": "'Неверный купон!'" }, 
         { "set": "data.receipt.discountPercent", "to": "0" }, 
@@ -76,98 +72,23 @@ module.exports = {
     ]
   },
 
-  // --- ACTION-РОУТЫ ДЛЯ UI И BRIDGE ---
   "POST /action/filterPositions": { 
     "type": "action", 
     "reads": ["positions", "viewState"], 
     "writes": ["viewState"], 
-    "update": "mainLayout",
+    "update": "positionsList", // ★ ЛОГИЧНО: эта операция обновляет список товаров
     "steps": [{ "run": "filterPositions" }]
   },
+  
   "POST /action/soft-refresh-receipt": {  
     "type": "action",  
     "reads": ["receipt"],  
-    "update": "mainLayout",
+    "update": "receipt",
     "steps": [] 
   },
   
-  "GET /action/showInfo": { 
-    "type": "action", 
-    "reads": ["receipt"], 
-    "steps": [
-      { 
-        "bridge:call": { 
-          "api": "dialogs.showMessageBox",
-          "args": "{ type: 'info', title: 'Информация о чеке', message: 'Текущая итоговая сумма чека:', detail: data.receipt.finalTotal + ' руб.' }"
-        }
-      }
-    ]
-  },
-  "GET /action/open-file": { 
-    "type": "action", 
-    "steps": [
-      { 
-        "bridge:call": { 
-          "api": "dialogs.showOpenDialog", 
-          "await": true, 
-          "resultTo": "context.openResult", 
-          "args": "{ properties: ['openFile'] }"
-        }
-      }, 
-      { 
-        "if": "!context.openResult.canceled", 
-        "then": [
-          { "log:value": "context.openResult.filePaths[0]" }
-        ]
-      }
-    ]
-  },
-  "GET /action/open-docs": { 
-    "type": "action", 
-    "steps": [
-      { 
-        "bridge:call": { 
-          "api": "shell.openExternal", 
-          "args": "'https://github.com/Xzdes/axleLLM'"
-        }
-      }
-    ]
-  },
-  "POST /action/saveReceipt": { 
-    "type": "action", 
-    "reads": ["receipt"], 
-    "steps": [
-      {
-        "run:set": "context.receiptText",
-        "handler": "formatReceiptForSave",
-        "with": "[data.receipt]"
-      },
-      {
-        "bridge:call": {
-          "api": "dialogs.showSaveDialog",
-          "await": true,
-          "resultTo": "context.saveInfo",
-          "args": "{ defaultPath: 'receipt.txt' }"
-        }
-      },
-      {
-        "if": "!context.saveInfo.canceled",
-        "then": [
-          {
-            "bridge:call": {
-              "api": "custom.fileUtils.saveTextFile",
-              "args": "[context.saveInfo.filePath, context.receiptText]",
-              "resultTo": "context.saveResult"
-            }
-          },
-          {
-            "bridge:call": {
-              "api": "dialogs.showMessageBox",
-              "args": "{ type: context.saveResult.success ? 'info' : 'error', title: 'Сохранение чека', message: context.saveResult.message }"
-            }
-          }
-        ]
-      }
-    ]
-  }
+  "GET /action/showInfo": { "type": "action", "reads": ["receipt"], "steps": [{"bridge:call": { "api": "dialogs.showMessageBox","args": "{ type: 'info', title: 'Информация о чеке', message: 'Текущая итоговая сумма чека:', detail: data.receipt.finalTotal + ' руб.' }"}}] },
+  "GET /action/open-file": { "type": "action", "steps": [{"bridge:call": { "api": "dialogs.showOpenDialog", "await": true, "resultTo": "context.openResult", "args": "{ properties: ['openFile'] }"}}, { "if": "!context.openResult.canceled", "then": [{ "log:value": "context.openResult.filePaths[0]" }]}]},
+  "GET /action/open-docs": { "type": "action", "steps": [{"bridge:call": { "api": "shell.openExternal", "args": "'https://github.com/Xzdes/axleLLM'"}}]},
+  "POST /action/saveReceipt": { "type": "action", "reads": ["receipt"], "steps": [{"run:set": "context.receiptText", "handler": "formatReceiptForSave", "with": "[data.receipt]"},{"bridge:call": { "api": "dialogs.showSaveDialog", "await": true, "resultTo": "context.saveInfo", "args": "{ defaultPath: 'receipt.txt' }"}},{"if": "!context.saveInfo.canceled","then": [{"bridge:call": { "api": "custom.fileUtils.saveTextFile", "args": "[context.saveInfo.filePath, context.receiptText]", "resultTo": "context.saveResult"}},{"bridge:call": { "api": "dialogs.showMessageBox", "args": "{ type: context.saveResult.success ? 'info' : 'error', title: 'Сохранение чека', message: context.saveResult.message }"}}]}]}
 };

@@ -39,37 +39,31 @@ class RequestHandler {
       const url = new URL(req.url, `http://${req.headers.host}`);
       console.log(`\n[RequestHandler] --> Handling request: ${req.method} ${url.pathname}`);
       
-      // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ: Надежная обработка статических файлов ★★★
       if (url.pathname.startsWith('/public/')) {
         const publicDir = path.join(this.appPath, 'public');
         const safeFilePath = path.normalize(path.join(this.appPath, url.pathname));
 
-        // Проверка безопасности, чтобы нельзя было выйти за пределы папки /public
         if (!safeFilePath.startsWith(publicDir)) {
           this._sendResponse(res, 403, 'Forbidden');
           return;
         }
 
         try {
-          // Асинхронно читаем файл
           const fileContent = await fs.promises.readFile(safeFilePath);
           const ext = path.extname(safeFilePath);
           const contentType = MIME_TYPES[ext] || 'application/octet-stream';
           this._sendResponse(res, 200, fileContent, contentType);
-          return; // Важно: завершаем обработку здесь
+          return;
         } catch (error) {
           if (error.code === 'ENOENT') {
-            // Если файл не найден, явно отдаем 404
             this._sendResponse(res, 404, `Static file not found: ${url.pathname}`);
           } else {
-            // Другие ошибки (например, нет прав на чтение)
             console.error(`[RequestHandler] Error serving static file ${safeFilePath}:`, error);
             this._sendResponse(res, 500, 'Internal Server Error');
           }
-          return; // Важно: завершаем обработку здесь
+          return;
         }
       }
-      // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
 
       const routeConfig = this._findRoute(req.method, url.pathname);
       if (!routeConfig) { 
@@ -123,19 +117,14 @@ class RequestHandler {
     if (finalContext._internal?.awaitingBridgeCall) {
         const continuation = async (resultFromClient) => {
             console.log(`[RequestHandler] Continuing action '${context.routeName}' after awaitable call.`);
-            
             const { resultTo, step } = finalContext._internal.awaitingBridgeCall;
             if (resultTo) engine._setValue(resultTo, resultFromClient);
-            
             engine.context._internal.interrupt = false;
             engine.context._internal.resumingFrom = step;
-
             await engine.run(routeConfig.steps || []);
-            
             const payload = await this._prepareFinalResponse(engine, routeConfig, req);
             this.socketEngine.sendToClient(finalContext.socketId, { type: 'action_response', payload });
         };
-        
         const httpResponsePayload = this.socketEngine.registerContinuation(finalContext.socketId, finalContext._internal.awaitingBridgeCall.details, continuation);
         this._sendResponse(res, 200, httpResponsePayload, 'application/json');
         return;
@@ -169,6 +158,7 @@ class RequestHandler {
     }
   }
 
+  // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
   async _prepareFinalResponse(engine, routeConfig, req) {
     const finalContext = engine.context;
     const internal = finalContext._internal || {};
@@ -177,14 +167,24 @@ class RequestHandler {
     if (internal.redirect) {
         responsePayload.redirect = internal.redirect;
     } else if (routeConfig.update) {
+        // Находим родительский view-роут для компонента, который мы хотим обновить.
         const parentViewRoute = this._findParentViewRouteForComponent(routeConfig.update);
-        const layoutComponent = parentViewRoute ? parentViewRoute.layout : routeConfig.update;
-        const reads = parentViewRoute ? parentViewRoute.reads : routeConfig.reads;
+        
+        if (!parentViewRoute) {
+            console.warn(`[RequestHandler] Could not find a parent view route for component '${routeConfig.update}'. UI update will be skipped.`);
+            return {};
+        }
 
-        const data = await this.connectorManager.getContext(reads || []);
+        // Компонентом для обновления ВСЕГДА будет главный layout этого view.
+        const layoutComponentToUpdate = parentViewRoute.layout;
+        const dataConnectorsToRead = parentViewRoute.reads || [];
+
+        const data = await this.connectorManager.getContext(dataConnectorsToRead);
         
-        responsePayload.update = layoutComponent; 
+        // Устанавливаем в ответе главный layout как компонент для обновления.
+        responsePayload.update = layoutComponentToUpdate; 
         
+        // Собираем полный объект props, который ожидает этот layout.
         const props = {
           data: data,
           user: finalContext.user,
@@ -199,6 +199,7 @@ class RequestHandler {
     
     return responsePayload;
   }
+  // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
 
   _findParentViewRouteForComponent(componentName) {
     for (const key in this.manifest.routes) {
@@ -215,7 +216,7 @@ class RequestHandler {
   
   _findRoute(method, pathname) {
     const key = `${method} ${pathname}`;
-    const route = this.manifest.routes[key] || this.manifest.routes[`GET ${pathname}`] || null;
+    const route = this.manifest.routes[key];
     if (route) {
       route.key = key;
     }

@@ -34,15 +34,16 @@ function hydrateRoot() {
     if (!window.React || !window.ReactDOM) {
       return console.error('[axle-client] CRITICAL: React or ReactDOM not found on window object.');
     }
-    // ★★★ НАЧАЛО КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
-    // Компонент-оболочка ДОЛЖЕН БЫТЬ ПУСТЫМ.
+    // ★★★ НАЧАЛО ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
+    // Компонент-оболочка ДОЛЖЕН БЫТЬ ПУСТЫМ (рендерить null).
     // Это говорит React: "Не рендери ничего нового, просто возьми под контроль
-    // тот HTML, который УЖЕ находится внутри rootElement".
+    // тот HTML, который УЖЕ находится внутри rootElement". Это исправляет ошибку гидратации.
     const ClientAppShell = () => null;
     mainRoot = window.ReactDOM.hydrateRoot(rootElement, React.createElement(ClientAppShell));
-    // ★★★ КОНЕЦ КЛЮЧЕВОГО ИСПРАВЛЕНИЯ ★★★
+    // ★★★ КОНЕЦ ФИНАЛЬНОГО ИСПРАВЛЕНИЯ ★★★
     console.log('[axle-client] Hydration complete.');
   } catch (e) {
+    // Если ошибка гидратации все же произойдет, мы увидим ее в консоли.
     console.error('[axle-client] CRITICAL: Hydration failed.', e);
   }
 }
@@ -131,6 +132,8 @@ async function processServerPayload(payload) {
 
     if (props.data) window.__INITIAL_DATA__ = props.data;
 
+    // Поскольку гидратация теперь проходит успешно, этот вызов будет работать
+    // как "умное" обновление, а не как добавление.
     mainRoot.render(window.React.createElement(ComponentToRender, props));
   }
 }

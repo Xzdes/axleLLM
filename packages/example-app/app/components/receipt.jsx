@@ -1,4 +1,3 @@
-// packages/example-app/app/components/receipt.jsx
 import React from 'react';
 
 function ReceiptItem({ item }) {
@@ -9,7 +8,8 @@ function ReceiptItem({ item }) {
         className="remove-btn"
         type="button"
         atom-action="POST /action/removeItem"
-        atom-target="#root" // ★ ИСПРАВЛЕНИЕ
+        // ★ ВОЗВРАЩАЕМ ЛОГИЧНЫЙ ТАРГЕТ
+        atom-target="#receipt-container"
         name="id"
         value={item.id}
       >
@@ -29,7 +29,7 @@ export default function Receipt({ data }) {
       atom-socket="receipt-updates"
       atom-on-event="receipt-changed"
       atom-action="POST /action/soft-refresh-receipt"
-      atom-target="#root" // ★ ИСПРАВЛЕНИЕ
+      atom-target="#receipt-container"
     >
       <h3>Чек</h3>
       
@@ -57,7 +57,7 @@ export default function Receipt({ data }) {
         <p className="final-total"><b>Итого:</b> <b>{receipt.finalTotal || '0.00'} руб.</b></p>
       </div>
 
-      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#root"> {/* ★ ИСПРАВЛЕНИЕ */}
+      <form className="coupon-form" atom-action="POST /action/applyCoupon" atom-target="#receipt-container">
         <input type="text" name="coupon_code" placeholder="Промокод" />
         <button type="submit" className="action-button">Применить</button>
       </form>
@@ -66,12 +66,11 @@ export default function Receipt({ data }) {
         type="button"
         className="action-button danger"
         atom-action="POST /action/clearReceipt"
-        atom-target="#root" // ★ ИСПРАВЛЕНИЕ
+        atom-target="#receipt-container"
       >
         Очистить чек
       </button>
       
-      {/* Для bridge-вызовов таргет не нужен, так как они не обновляют UI напрямую */}
       <button 
         type="button" className="action-button"
         style={{ marginTop: '10px' }}
